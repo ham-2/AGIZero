@@ -8,7 +8,7 @@ using namespace std;
 namespace AGI {
 	
 	enum UPiece : int {
-		EMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
+		UEMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
 	};
 
 	enum Piece : int {
@@ -19,9 +19,9 @@ namespace AGI {
 
 	const string FEN_Pieces = " PNBRQK  pnbrqk";
 
-	Piece parse_piece(char c) { return Piece(FEN_Pieces.find(c)); }
+	Piece parse_piece(char c);
 
-	char print_piece(Piece p) { return FEN_Pieces[p]; }
+	char print_piece(Piece p);
 
 }
 

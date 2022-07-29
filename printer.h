@@ -1,5 +1,5 @@
 #ifndef PRINTER_INCLUDED
-#define PRINTER_INLCUDED
+#define PRINTER_INCLUDED
 
 #include <iostream>
 #include <mutex>
@@ -13,13 +13,7 @@ namespace AGI {
 #define sync_cout cout << LOCK
 #define sync_endl endl << UNLOCK
 
-	ostream& operator<< (ostream& os, Sync lock) {
-		static mutex m;
-		if (lock == LOCK) { m.lock(); }
-		if (lock == UNLOCK) { m.unlock(); }
-
-		return os;
-	}
+	ostream& operator<< (ostream& os, Sync lock);
 
 }
 

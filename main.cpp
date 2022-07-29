@@ -3,6 +3,8 @@
 #include <string>
 
 #include "benchmark.h"
+#include "board.h"
+#include "threads.h"
 
 using namespace std;
 using namespace AGI;
@@ -10,7 +12,10 @@ using namespace AGI;
 void main() {
 	
 	string input, word;
-	
+
+	Board::init();
+	thread_manager.init();
+
 	while (true) {
 		getline(cin, input);
 
@@ -31,7 +36,7 @@ void main() {
 		else if (word == "perft") {
 			int depth;
 			ss >> depth;
-			perft(depth);
+			perft(thread_manager.threads[0]->board, depth);
 		}
 	}
 

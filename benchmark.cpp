@@ -5,7 +5,7 @@ using namespace std;
 
 namespace AGI {
 
-	void perft(int depth) {
+	void perft(Position* board, int depth) {
 		sync_cout << depth << sync_endl;
 	}
 

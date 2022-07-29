@@ -35,11 +35,15 @@ namespace AGI {
 		Color side_to_move;
 		Undo* undo_stack;
 
-		void init();
 		void push_stack();
 		void pop_stack();
+		void clear_stack();
+
+		void rebuild();
 
 	public:
+		Position();
+
 		void verify();
 		void show();
 		void set(string fen);
