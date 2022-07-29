@@ -1,8 +1,5 @@
 
-.vs/slnx.sqlite
-.vs/AGIZero/v17/Browse.VC.opendb
-.vs/AGIZero/v17/Browse.VC.db-wal
-.vs/AGIZero/v17/Browse.VC.db-shm
-.vs/AGIZero/v17/Browse.VC.db
-.vs/AGIZero/FileContentIndex/read.lock
+.vs/
+x64/
+AGIZero.*
 *.vsidx
