@@ -4,6 +4,7 @@
 
 #include "benchmark.h"
 #include "board.h"
+#include "position.h"
 #include "threads.h"
 
 using namespace std;
@@ -14,6 +15,7 @@ void main() {
 	string input, word;
 
 	Board::init();
+	Position::init();
 	thread_manager.init();
 
 	while (true) {

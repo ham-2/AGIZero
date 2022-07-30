@@ -49,9 +49,12 @@ namespace AGI {
 	public:
 		Position();
 
+		static void init();
+
 		void verify();
 		void show();
 		void set(string fen);
+		Move parse_move(string string_move);
 		void do_move(Move m);
 
 
