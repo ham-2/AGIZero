@@ -18,6 +18,9 @@ namespace AGI {
 	};
 
 	inline Square& operator++(Square& s) { return s = Square(int(s) + 1); }
+	inline Square& operator+=(Square& s, int i) { return s = Square(int(s) + i); }
+
+	Square parse_square(char file, char rank);
 
 	// Use 16bit integer for moves - 0bXXAABBBBBBCCCCCC
 	// C: 6 bits indicating from square

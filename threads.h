@@ -17,6 +17,8 @@ namespace AGI {
 		Position* board;
 		mutex m;
 		condition_variable cv;
+
+		Thread();
 	};
 
 	class Threadmgr {
@@ -25,10 +27,11 @@ namespace AGI {
 
 		void init();
 		void set_all(string fen);
+		void show(int i);
 	};
 
 	extern Threadmgr thread_manager;
-
+	extern const char* startpos_fen;
 }
 
 #endif

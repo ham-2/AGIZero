@@ -4,6 +4,10 @@ namespace AGI {
 	
 	Bitboard SquareBoard[64];
 
+	Square parse_square(char file, char rank) {
+		return Square((rank - '1') * 8 + (file - 'a'));
+	}
+
 	namespace Board {
 
 		void init() {
@@ -13,5 +17,7 @@ namespace AGI {
 		}
 
 	}
+
+
 
 }

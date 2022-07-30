@@ -12,12 +12,17 @@ namespace AGI {
 
 	enum Color : bool { WHITE = false, BLACK = true };
 
+	inline Color to_color(Piece p) {
+		return Color(p > 8);
+	}
+
 	typedef uint64_t Key;
 
 	struct Undo {
 		// To detect repetition, we store key in this struct
 		Key key;
 		int repetition;
+		int fifty_move;
 
 		// Informations needed to undo a move. Stored in a stack
 		Undo* prev;
