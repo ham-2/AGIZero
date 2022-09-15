@@ -26,8 +26,12 @@ namespace AGI {
 		vector<Thread*> threads;
 
 		void init();
+		void acquire_lock();
+		void release_lock();
 		void set_all(string fen);
 		void show(int i);
+		void do_move(Move m);
+		void do_move(string ms);
 	};
 
 	extern Threadmgr thread_manager;

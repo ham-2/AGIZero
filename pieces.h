@@ -7,8 +7,12 @@ using namespace std;
 
 namespace AGI {
 	
+	enum Color : bool { WHITE = false, BLACK = true };
+
+	inline constexpr Color operator~(Color c) { return Color(c ^ 1); }
+
 	enum UPiece : int {
-		UEMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, OCCUPIED
+		UEMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
 	};
 
 	enum Piece : int {
@@ -17,6 +21,10 @@ namespace AGI {
 		B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING, B_P1, B_P2
 	};
 
+	inline Color to_color(Piece p) {
+		return Color(p > 8);
+	}
+
 	const string FEN_Pieces = " PNBRQK  pnbrqk";
 
 	bool parse_piece(char c, Piece& p);
@@ -24,7 +32,11 @@ namespace AGI {
 	char print_piece(Piece p);
 
 	inline UPiece to_upiece(Piece p) {
-		return int(p) < 7 ? UPiece(int(p)) : UPiece(int(p - 8));
+		return UPiece(int(p & 7));
+	}
+
+	inline Piece to_piece(UPiece u, Color c) {
+		return c ? Piece(u + 8) : Piece(u);
 	}
 
 }

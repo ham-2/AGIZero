@@ -20,7 +20,7 @@ namespace AGI {
 		//set Zobrist keys at startup
 		PRNG generator = PRNG(9235123129483259312ULL);
 
-		for (int i = 0; i < 12; i++) {
+		for (int i = 1; i < 12; i++) {
 			for (int j = 0; j < 64; j++) {
 				piece_keys[piece_list[i]][j] = Key(generator.get());
 			}
@@ -60,17 +60,36 @@ namespace AGI {
 
 	void Position::rebuild() { // computes others from squares data.
 		for (Square i = A1; i < SQ_END; ++i) {
-			pieces[OCCUPIED] ^= SquareBoard[i];
 			pieces[to_upiece(squares[i])] ^= SquareBoard[i];
-			colors[to_color(squares[i])] ^= SquareBoard[i];
-			piece_count[squares[i]]++;
+			if (squares[i] != EMPTY) {
+				colors[to_color(squares[i])] ^= SquareBoard[i];
+				piece_count[squares[i]]++;
+			}
 		}
+	}
+
+	inline void Position::place(Piece p, Square s) {
+		squares[s] = p;
+		undo_stack->key ^= piece_keys[p][s];
+		pieces[UEMPTY] ^= SquareBoard[s];
+		colors[to_color(p)] ^= SquareBoard[s];
+		pieces[to_upiece(p)] ^= SquareBoard[s];
+		piece_count[p]++;
+	}
+
+	inline void Position::remove(Piece p, Square s) {
+		squares[s] = EMPTY;
+		undo_stack->key ^= piece_keys[p][s];
+		pieces[UEMPTY] ^= SquareBoard[s];
+		colors[to_color(p)] ^= SquareBoard[s];
+		pieces[to_upiece(p)] ^= SquareBoard[s];
+		piece_count[p]--;
 	}
 
 	Position::Position() {
 		memset(this, 0, sizeof(Position));
 		undo_stack = new Undo;
-		memset(undo_stack, 0, sizeof(undo_stack));
+		memset(undo_stack, 0, sizeof(Undo));
 		undo_stack->prev = nullptr;
 	}
 
@@ -85,18 +104,18 @@ namespace AGI {
 		testpos.rebuild();
 
 		Bitboard test = EmptyBoard;
-		for (int i = 0; i < 8; i++) {
-			if (i < 7 && test & pieces[i]) {
+		for (int i = 0; i < 7; i++) {
+			if (test & pieces[i]) {
 				sync_cout << "Pieces overlap detected at " << i << sync_endl;
 			}
 			test |= pieces[i];
 			if (testpos.pieces[i] != pieces[i]) {
 				sync_cout << "Pieces inconsistent at " << i << sync_endl;
 			}
-			if (testpos.piece_count[i] != piece_count[i]) {
+			if (i != 0 && testpos.piece_count[i] != piece_count[i]) {
 				sync_cout << "White piece count inconsistent at " << i << sync_endl;
 			}
-			if (testpos.piece_count[i + 8] != piece_count[i + 8]) {
+			if (i != 0 && testpos.piece_count[i + 8] != piece_count[i + 8]) {
 				sync_cout << "Black piece count inconsistent at " << i + 8 << sync_endl;
 			}
 		}
@@ -105,9 +124,46 @@ namespace AGI {
 		if (testpos.colors[BLACK] != colors[BLACK]) { sync_cout << "Black inconsistent" << sync_endl; }
 	}
 
+	Key Position::get_key() {
+		// we need to modify key if 50move count is high
+		if (undo_stack->fifty_move > 20) {
+			return undo_stack->key ^ fifty_move_key[((undo_stack->fifty_move - 20) >> 2) & 8];
+		}
+		return undo_stack->key;
+	}
+
 	void AGI::Position::show() {
 		sync_cout << *this << sync_endl;
 		verify();
+	}
+
+	ostream& AGI::operator<<(ostream& os, Position& pos) {
+		// Show board
+		Square sq = A8;
+		for (int i = 0; i < 8; i++) {
+			for (int j = 0; j < 8; j++) {
+				os << print_piece(pos.squares[sq]) << " ";
+				++sq;
+			}
+			sq += (-16);
+			os << "\n";
+		}
+		// Side to move, 50move count
+		if (pos.side_to_move) { os << "Black to move, "; }
+		else { os << "White to move, "; }
+		os << "50-move count " << pos.undo_stack->fifty_move << "\n";
+
+		// Castling Rights
+		os << "Castling rights: ";
+		for (int i = 0; i < 4; i++) {
+			os << bool(pos.undo_stack->castling_rights[i]) << " ";
+		}
+		os << "\n";
+
+		// Key
+		os << "Key : " << pos.get_key() << "\n";
+
+		return os;
 	}
 
 	void Position::set(string fen) {
@@ -119,7 +175,7 @@ namespace AGI {
 		Undo* temp = undo_stack;
 		memset(this, 0, sizeof(Position));
 		undo_stack = temp;
-		undo_stack->key = 0ULL;
+		memset(undo_stack, 0, sizeof(Undo));
 
 		// set pieces from rank 8.
 		ss >> noskipws >> c;
@@ -147,25 +203,25 @@ namespace AGI {
 		ss >> c;
 
 		// castling rights
-		for (int i = 0; i < 4; i++) { undo_stack->castling_rights[i] = false; }
+		for (int i = 0; i < 4; i++) { undo_stack->castling_rights[i] = EmptyBoard; }
 
 		ss >> c;
 		while (c != ' ') {
 			switch (c) {
 			case 'K':
-				undo_stack->castling_rights[0] = true;
+				undo_stack->castling_rights[0] = CastlingFrom[0];
 				undo_stack->key ^= castle_keys[0];
 				break;
 			case 'Q':
-				undo_stack->castling_rights[1] = true;
+				undo_stack->castling_rights[1] = CastlingFrom[1];
 				undo_stack->key ^= castle_keys[1];
 				break;
 			case 'k':
-				undo_stack->castling_rights[2] = true;
+				undo_stack->castling_rights[2] = CastlingFrom[2];
 				undo_stack->key ^= castle_keys[2];
 				break;
 			case 'q':
-				undo_stack->castling_rights[3] = true;
+				undo_stack->castling_rights[3] = CastlingFrom[3];
 				undo_stack->key ^= castle_keys[3];
 				break;
 			}
@@ -186,16 +242,12 @@ namespace AGI {
 		int count;
 		ss >> skipws >> count;
 		undo_stack->fifty_move = count;
-			// we need to modify key if 50move count is high
-		if (count > 20) {
-			undo_stack->key ^= fifty_move_key[((count - 20) >> 2) & 8];
-		}
 		
 		// move count - doesn't matter
 
 		// write other data
-		rebuild();
 		undo_stack->captured = EMPTY;
+		rebuild();
 	}
 
 	Move Position::parse_move(string string_move) {
@@ -228,32 +280,101 @@ namespace AGI {
 		return Move(move_int);
 	}
 
-
-
-	ostream& AGI::operator<<(ostream& os, Position& pos) {
-		// Show board
-		Square sq = A8;
-		for (int i = 0; i < 8; i++) {
-			for (int j = 0; j < 8; j++) {
-				os << print_piece(pos.squares[sq]) << " ";
-				++sq;
-			}
-			sq += (-16);
-			os << "\n";
-		}
-		// Side to move, 50move count
-		if (pos.side_to_move) { os << "Black to move, "; }
-		else { os << "White to move, "; }
-		os << "50-move count " << pos.undo_stack->fifty_move << "\n";
+	void Position::do_move(Move m) {
+		Undo* new_undo = new Undo;
+		memcpy(new_undo, undo_stack, sizeof(Undo));
+		new_undo->prev = undo_stack;
+		new_undo->fifty_move++;
+		new_undo->enpassant = Square(0);
 		
-		// Castling Rights
-		os << "Castling rights: ";
-		for (int i = 0; i < 4; i++) {
-			os << pos.undo_stack->castling_rights[i];
-		}
-		os << "\n";
+		if (undo_stack->enpassant != Square(0)) {
+			new_undo->key ^= enpassant_keys[get_file(undo_stack->enpassant)];
+		} // unset en passant key
+		undo_stack = new_undo;
 
-		return os;
+		Square from = get_from(m);
+		Square to = get_to(m);
+
+		Piece moved = squares[from];
+		Piece captured = squares[to];
+		remove(moved, from);
+
+		if (captured != EMPTY) {
+			remove(captured, to);
+			new_undo->fifty_move = 0;
+		}
+
+		// set castling rights
+		for (int i = 0; i < 4; i++) {
+			if (new_undo->castling_rights[i] & SquareBoard[from]) {
+				new_undo->castling_rights[i] = EmptyBoard;
+				new_undo->key ^= castle_keys[i];
+			}
+		}
+
+		switch (get_movetype(m)) {
+		case 0: { // Normal
+			place(moved, to);
+			break;
+		}
+
+		case 1: { // Promotion
+			// change moved to promoted piece
+			moved = side_to_move ? Piece(get_promotion(m) + 8) : Piece(get_promotion(m));
+			place(moved, to);
+			break;
+		}
+
+		case 2: { // Castle
+			// do castling
+			Square rook_from, rook_to;
+			Piece rook = to_piece(ROOK, side_to_move);
+			if (get_file(to) > 5) {
+				// Kingside
+				rook_from = Square(to + 1);
+				rook_to = Square(to - 1);
+			}
+			else {
+				// Queenside
+				rook_from = Square(to - 2);
+				rook_to = Square(to + 1);
+			}
+			remove(rook, rook_from);
+			place(rook, rook_to);
+			place(moved, to);
+			break;
+		}
+
+		case 3: { // En Passant
+			Square captured_square = side_to_move ? Square(to + 8) : Square(to - 8);
+			remove(to_piece(PAWN, ~side_to_move), captured_square);
+			place(moved, to);
+			break;
+		}
+		}
+
+		if (to_upiece(moved) == PAWN) {
+			// set en passant square
+			if (side_to_move) {
+				if (to - from == 16) { 
+					new_undo->enpassant = Square(to - 8);
+					//new_undo->key ^= enpassant_keys[get_file(to)];
+				}
+			}
+			else {
+				if (from - to == 16) { 
+					new_undo->enpassant = Square(to + 8);
+					//new_undo->key ^= enpassant_keys[get_file(to)];
+				}
+			}
+			new_undo->fifty_move = 0;
+		}
+
+		side_to_move = ~side_to_move;
+		new_undo->key ^= side_to_move_key;
+
+		new_undo->captured = captured;
 	}
+
 
 }

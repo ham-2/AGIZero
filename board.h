@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#include "pieces.h"
+
 namespace AGI {
 
 	enum Square : int {
@@ -44,6 +46,7 @@ namespace AGI {
 	constexpr Bitboard FullBoard  = ~EmptyBoard;
 	
 	extern Bitboard SquareBoard[64];
+	extern Bitboard CastlingFrom[4];
 
 	namespace Board {
 		void init();

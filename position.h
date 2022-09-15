@@ -10,12 +10,6 @@ using namespace std;
 
 namespace AGI {
 
-	enum Color : bool { WHITE = false, BLACK = true };
-
-	inline Color to_color(Piece p) {
-		return Color(p > 8);
-	}
-
 	typedef uint64_t Key;
 
 	struct Undo {
@@ -28,13 +22,13 @@ namespace AGI {
 		Undo* prev;
 		Piece captured;
 		Square enpassant; // if en passant is possible
-		bool castling_rights[4]; // WK, WQ, BK, BQ
+		Bitboard castling_rights[4]; // WK, WQ, BK, BQ
 	};
 
 	class Position {
 	private:
 		Piece squares[64];
-		Bitboard pieces[8];
+		Bitboard pieces[7];
 		Bitboard colors[2];
 		int piece_count[16];
 		Color side_to_move;
@@ -46,12 +40,17 @@ namespace AGI {
 
 		void rebuild();
 
+		void place(Piece p, Square s);
+		void remove(Piece p, Square s);
+
+
 	public:
 		Position();
 
 		static void init();
 
 		void verify();
+		Key get_key();
 		void show();
 		void set(string fen);
 		Move parse_move(string string_move);

@@ -14,17 +14,40 @@ namespace AGI {
 		set_all(startpos_fen);
 	}
 
-	void Threadmgr::set_all(string fen) {
+	void Threadmgr::acquire_lock() {
 		for (int i = 0; i < threads.size(); i++) {
 			threads[i]->m.lock();
-			threads[i]->board->set(fen);
+		}
+	}
+
+	void Threadmgr::release_lock() {
+		for (int i = 0; i < threads.size(); i++) {
 			threads[i]->m.unlock();
+		}
+	}
+
+	void Threadmgr::set_all(string fen) {
+		for (int i = 0; i < threads.size(); i++) {
+			threads[i]->board->set(fen);
 		}
 	}
 
 	void Threadmgr::show(int i) {
 		if (i < threads.size()) {
 			threads[i]->board->show();
+		}
+	}
+
+	void Threadmgr::do_move(Move m) {
+		for (int i = 0; i < threads.size(); i++) {
+			threads[i]->board->do_move(m);
+		}
+	}
+
+	void Threadmgr::do_move(string ms) {
+		Move m = threads[0]->board->parse_move(ms);
+		for (int i = 0; i < threads.size(); i++) {
+			threads[i]->board->do_move(m);
 		}
 	}
 

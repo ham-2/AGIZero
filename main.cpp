@@ -44,11 +44,14 @@ void main() {
 				ss >> word; // "moves"
 			}
 
+			thread_manager.acquire_lock();
 			thread_manager.set_all(fen);
-			
 			if (word == "moves") {
-				
+				while (ss >> word) {
+					thread_manager.do_move(word);
+				}
 			}
+			thread_manager.release_lock();
 		}
 
 		else if (word == "perft") {
