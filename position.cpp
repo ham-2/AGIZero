@@ -1,5 +1,8 @@
 #include <sstream>
+#include <bitset>
+#include <memory.h>
 
+#include "constants.h"
 #include "position.h"
 #include "printer.h"
 #include "misc.h"
@@ -8,25 +11,28 @@ namespace AGI {
 
 	// For Zobrist Hashing
 	Key piece_keys[15][64];
-	Key castle_keys[4];
+	Key castle_keys[16];
 	Key enpassant_keys[8];
 	Key side_to_move_key;
 	Key fifty_move_key[8];
 
 	constexpr Piece piece_list[] = { W_PAWN, W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
 									 B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING };
+
+	// castling_helper helper
+	int castling_helper[64];
 	
 	void Position::init() {
 		//set Zobrist keys at startup
 		PRNG generator = PRNG(9235123129483259312ULL);
 
-		for (int i = 1; i < 12; i++) {
+		for (Piece p : piece_list) {
 			for (int j = 0; j < 64; j++) {
-				piece_keys[piece_list[i]][j] = Key(generator.get());
+				piece_keys[p][j] = Key(generator.get());
 			}
 		}
 
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 16; i++) {
 			castle_keys[i] = Key(generator.get());
 		}
 
@@ -39,19 +45,23 @@ namespace AGI {
 		for (int i = 0; i < 8; i++) {
 			fifty_move_key[i] = Key(generator.get());
 		}
-	}
 
-
-	void Position::push_stack() {
-		Undo* new_top = new Undo;
-		new_top->prev = undo_stack;
-		undo_stack = new_top;
+		//set castling_helper helper
+		for (int i = A1; i < SQ_END; i++) {
+			castling_helper[i] = ~(0);
+		}
+		castling_helper[A1] = ~(2);
+		castling_helper[E1] = ~(1 | 2);
+		castling_helper[H1] = ~(1);
+		castling_helper[A8] = ~(8);
+		castling_helper[E8] = ~(4 | 8);
+		castling_helper[H8] = ~(4);
 	}
 
 	void Position::pop_stack() {
-		Undo* temp = undo_stack;
+		Undo* t = undo_stack;
 		undo_stack = undo_stack->prev;
-		delete temp;
+		if (t->del) { delete t; }
 	}
 
 	void Position::clear_stack() {
@@ -60,30 +70,53 @@ namespace AGI {
 
 	void Position::rebuild() { // computes others from squares data.
 		for (Square i = A1; i < SQ_END; ++i) {
-			pieces[to_upiece(squares[i])] ^= SquareBoard[i];
-			if (squares[i] != EMPTY) {
-				colors[to_color(squares[i])] ^= SquareBoard[i];
-				piece_count[squares[i]]++;
+			Piece p = squares[i];
+			pieces[to_upiece(p)] ^= SquareBoard[i];
+			if (p != EMPTY) {
+				colors[to_color(p)] ^= SquareBoard[i];
+				piece_count[p]++;
+				piece_count[EMPTY]++;
+				material += piece_table[p][i];
+				material_t += Material_MG[to_upiece(p)];
+				undo_stack->key ^= piece_keys[p][i];
 			}
 		}
+
+		undo_stack->checkers =
+			get_attackers(lsb_square(get_pieces(side_to_move, KING)), ~pieces[EMPTY])
+			& colors[~side_to_move];
 	}
 
+	// place/remove/move functions - dont handle key xor
 	inline void Position::place(Piece p, Square s) {
 		squares[s] = p;
-		undo_stack->key ^= piece_keys[p][s];
 		pieces[UEMPTY] ^= SquareBoard[s];
 		colors[to_color(p)] ^= SquareBoard[s];
 		pieces[to_upiece(p)] ^= SquareBoard[s];
 		piece_count[p]++;
+		piece_count[EMPTY]++;
+		material += piece_table[p][s];
+		material_t += Material_MG[to_upiece(p)];
 	}
 
 	inline void Position::remove(Piece p, Square s) {
 		squares[s] = EMPTY;
-		undo_stack->key ^= piece_keys[p][s];
 		pieces[UEMPTY] ^= SquareBoard[s];
 		colors[to_color(p)] ^= SquareBoard[s];
 		pieces[to_upiece(p)] ^= SquareBoard[s];
 		piece_count[p]--;
+		piece_count[EMPTY]--;
+		material -= piece_table[p][s];
+		material_t -= Material_MG[to_upiece(p)];
+	}
+
+	inline void Position::move_piece(Piece p, Square from, Square to) {
+		squares[from] = EMPTY;
+		squares[to] = p;
+		pieces[UEMPTY] ^= SquareBoard[from] ^ SquareBoard[to];
+		colors[to_color(p)] ^= SquareBoard[from] ^ SquareBoard[to];
+		pieces[to_upiece(p)] ^= SquareBoard[from] ^ SquareBoard[to];
+		material += piece_table[p][to] - piece_table[p][from];
 	}
 
 	Position::Position() {
@@ -96,7 +129,7 @@ namespace AGI {
 	void AGI::Position::verify() {
 		// Verify all data are consistant.
 		if (colors[0] & colors[1]) {
-			sync_cout << "Colors overlap detected" << sync_endl;
+			cout << "Colors overlap detected" << endl;
 		}
 
 		Position testpos;
@@ -106,22 +139,22 @@ namespace AGI {
 		Bitboard test = EmptyBoard;
 		for (int i = 0; i < 7; i++) {
 			if (test & pieces[i]) {
-				sync_cout << "Pieces overlap detected at " << i << sync_endl;
+				cout << "Pieces overlap detected at " << i << endl;
 			}
 			test |= pieces[i];
 			if (testpos.pieces[i] != pieces[i]) {
-				sync_cout << "Pieces inconsistent at " << i << sync_endl;
+				cout << "Pieces inconsistent at " << i << endl;
 			}
 			if (i != 0 && testpos.piece_count[i] != piece_count[i]) {
-				sync_cout << "White piece count inconsistent at " << i << sync_endl;
+				cout << "White piece count inconsistent at " << i << endl;
 			}
 			if (i != 0 && testpos.piece_count[i + 8] != piece_count[i + 8]) {
-				sync_cout << "Black piece count inconsistent at " << i + 8 << sync_endl;
+				cout << "Black piece count inconsistent at " << i + 8 << endl;
 			}
 		}
 
-		if (testpos.colors[WHITE] != colors[WHITE]) { sync_cout << "White inconsistent" << sync_endl; }
-		if (testpos.colors[BLACK] != colors[BLACK]) { sync_cout << "Black inconsistent" << sync_endl; }
+		if (testpos.colors[WHITE] != colors[WHITE]) { cout << "White inconsistent" << endl; }
+		if (testpos.colors[BLACK] != colors[BLACK]) { cout << "Black inconsistent" << endl; }
 	}
 
 	Key Position::get_key() {
@@ -132,12 +165,153 @@ namespace AGI {
 		return undo_stack->key;
 	}
 
-	void AGI::Position::show() {
-		sync_cout << *this << sync_endl;
+	Bitboard Position::get_attackers(Square s, Bitboard occupied) {
+		return attacks_pawn<BLACK>(s) & get_pieces(WHITE, PAWN) |
+			attacks_pawn<WHITE>(s) & get_pieces(BLACK, PAWN) |
+			attacks<KNIGHT>(s, occupied) & pieces[KNIGHT] |
+			attacks<BISHOP>(s, occupied) & (pieces[BISHOP] | pieces[QUEEN]) |
+			attacks<ROOK>(s, occupied) & (pieces[ROOK] | pieces[QUEEN]) |
+			attacks<KING>(s, occupied) & pieces[KING];
+	}
+
+	Bitboard Position::get_pinned(Color c, Square k) {
+		Bitboard pinned = EmptyBoard;
+		Bitboard occupied = ~pieces[EMPTY];
+		Bitboard ab = PseudoAttacks[BISHOP][k] & colors[~c] & (pieces[BISHOP] | pieces[QUEEN])
+			| PseudoAttacks[ROOK][k] & colors[~c] & (pieces[ROOK] | pieces[QUEEN]);
+
+		Bitboard ray;
+		Square b;
+
+		while (ab) {
+			b = pop_lsb(&ab);
+			ray = (Rays[b][k] & ((FullBoard << b) ^ (FullBoard << k)));
+			ray = (ray & (ray - 1)) & occupied;
+			if (popcount(ray) == 1) { pinned |= ray; }
+		}
+
+		return pinned;
+	}
+
+	inline Bitboard see_attackers(Square s, Bitboard occupied, Bitboard bq, Bitboard rq) {
+		return attacks<BISHOP>(s, occupied) & bq | attacks<ROOK>(s, occupied) & rq;
+	}
+
+	Bitboard Position::see_least_piece(Color c, Bitboard attackers, UPiece& u) {
+		attackers &= colors[c];
+		for (UPiece v : {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING}) {
+			if (Bitboard b = attackers & pieces[v]) {
+				u = v;
+				return b & (b ^ (b - 1));
+			}
+		}
+		return 0;
+	}
+
+	int Position::see(Move m) {
+		Color c = side_to_move;
+		Square s = get_to(m);
+		Bitboard lp = SquareBoard[get_from(m)];
+		Bitboard occupied = ~pieces[EMPTY];
+		Bitboard bq = (pieces[BISHOP] | pieces[QUEEN]);
+		Bitboard rq = (pieces[ROOK] | pieces[QUEEN]);
+		Bitboard attackers = get_attackers(s, occupied);
+		UPiece u = to_upiece(squares[get_from(m)]);
+		int value[8];
+		int depth = 0;
+		value[0] = Material_MG[to_upiece(squares[s])];
+		do {
+			depth++;
+			value[depth] = Material_MG[u] - value[depth - 1];
+			if ((value[depth] < 0) && (value[depth - 1] > 0)) { break; }
+			attackers ^= lp;
+			occupied ^= lp;
+			bq &= ~lp;
+			rq &= ~lp;
+			attackers |= see_attackers(s, occupied, bq, rq);
+			c = ~c;
+			if (depth > 6) { return EVAL_WIN; }
+		} while (lp = see_least_piece(c, attackers, u));
+		while (--depth) {
+			value[depth - 1] = -max(-value[depth - 1], value[depth]);
+		}
+		return value[0];
+	}
+
+	bool Position::is_check(Move m)
+	{
+		Square from = get_from(m);
+		Square to = get_to(m);
+		Color c = side_to_move;
+		Square king = undo_stack->king_square[~c];
+		UPiece u = to_upiece(squares[from]);
+		Bitboard occupied = ~pieces[EMPTY];
+
+		if (get_movetype(m) == 1) { u = get_promotion(m); }
+		if (get_movetype(m) == 2) { 
+			u = ROOK;
+			to = get_file(to) > 4 ? (c ? F8 : F1) : (c ? D8 : D1);
+		}
+		switch (u) {
+		case PAWN: {
+			if (c) {
+				if (attacks_pawn<WHITE>(king) & SquareBoard[to]) { return true; }
+			}
+			else {
+				if (attacks_pawn<BLACK>(king) & SquareBoard[to]) { return true; }
+			}
+			break;
+		}
+		case KNIGHT: {
+			if (attacks<KNIGHT>(king, occupied) & SquareBoard[to]) {
+				return true;
+			}
+			break;
+		}
+		case BISHOP: {
+			if (attacks<BISHOP>(king, occupied) & SquareBoard[to]) {
+				return true;
+			}
+			break;
+		}
+		case ROOK: {
+			if (attacks<ROOK>(king, occupied) & SquareBoard[to]) {
+				return true;
+			}
+			break;
+		}
+		case QUEEN: {
+			if (attacks<QUEEN>(king, occupied) & SquareBoard[to]) {
+				return true;
+			}
+			break;
+		}
+		}
+		// Discovered check
+		Bitboard ba = (pieces[BISHOP] | pieces[QUEEN]) & colors[c];
+		Bitboard ra = (pieces[ROOK] | pieces[QUEEN]) & colors[c];
+		if (get_movetype(m) == 3) {
+			Square cp = c ? to + 8 : to - 8;
+			occupied ^= cp;
+		}
+		if ((PseudoAttacks[BISHOP][king] & ba & SquareBoard[from])
+			&& !(Rays[from][king] & SquareBoard[to])) {
+			if (attacks<BISHOP>(king, occupied ^ SquareBoard[from]) & ba) { return true; }
+		}
+		if ((PseudoAttacks[ROOK][king] & ra & SquareBoard[from])
+			&& !(Rays[from][king] & SquareBoard[to])) {
+			if (attacks<ROOK>(king, occupied ^ SquareBoard[from]) & ra) { return true; }
+		}
+
+		return false;
+	}
+
+	void Position::show() {
+		cout << *this << endl;
 		verify();
 	}
 
-	ostream& AGI::operator<<(ostream& os, Position& pos) {
+	ostream& operator<<(ostream& os, Position& pos) {
 		// Show board
 		Square sq = A8;
 		for (int i = 0; i < 8; i++) {
@@ -154,14 +328,28 @@ namespace AGI {
 		os << "50-move count " << pos.undo_stack->fifty_move << "\n";
 
 		// Castling Rights
-		os << "Castling rights: ";
-		for (int i = 0; i < 4; i++) {
-			os << bool(pos.undo_stack->castling_rights[i]) << " ";
+		os << "Castling rights: "
+			<< bitset<8>(pos.undo_stack->castling_rights) << "\n";
+
+		// En Passant SQUARE
+		os << "En passant square: " << pos.undo_stack->enpassant << "\n";
+
+		// Key
+		os << "Key: " << pos.get_key() << "\n";
+
+		//
+		os << "Checkers : ";
+		Bitboard checkers = pos.undo_stack->checkers;
+		Square s;
+		while (checkers) {
+			s = pop_lsb(&checkers);
+			os << s << " ";
 		}
 		os << "\n";
 
-		// Key
-		os << "Key : " << pos.get_key() << "\n";
+		// repetition
+		os << "Repetition: " << pos.undo_stack->repetition << endl;
+		os << "Repetition: " << pos.get_repetition(2) << endl;
 
 		return os;
 	}
@@ -190,7 +378,9 @@ namespace AGI {
 			}
 			else if (parse_piece(c, p)) {
 				squares[sq] = p;
-				undo_stack->key ^= piece_keys[p][sq];
+				if (to_upiece(p) == KING) {
+					undo_stack->king_square[to_color(p)] = sq;
+				}
 				++sq;
 			}
 			ss >> c;
@@ -203,30 +393,27 @@ namespace AGI {
 		ss >> c;
 
 		// castling rights
-		for (int i = 0; i < 4; i++) { undo_stack->castling_rights[i] = EmptyBoard; }
+		undo_stack->castling_rights = 0;
 
 		ss >> c;
 		while (c != ' ') {
 			switch (c) {
 			case 'K':
-				undo_stack->castling_rights[0] = CastlingFrom[0];
-				undo_stack->key ^= castle_keys[0];
+				undo_stack->castling_rights ^= 1;
 				break;
 			case 'Q':
-				undo_stack->castling_rights[1] = CastlingFrom[1];
-				undo_stack->key ^= castle_keys[1];
+				undo_stack->castling_rights ^= 2;
 				break;
 			case 'k':
-				undo_stack->castling_rights[2] = CastlingFrom[2];
-				undo_stack->key ^= castle_keys[2];
+				undo_stack->castling_rights ^= 4;
 				break;
 			case 'q':
-				undo_stack->castling_rights[3] = CastlingFrom[3];
-				undo_stack->key ^= castle_keys[3];
+				undo_stack->castling_rights ^= 8;
 				break;
 			}
 			ss >> c;
 		}
+		undo_stack->key ^= castle_keys[undo_stack->castling_rights];
 
 		// en passant square
 		char file, rank;
@@ -255,37 +442,37 @@ namespace AGI {
 
 		Square from = parse_square(string_move[0], string_move[1]);
 		Square to   = parse_square(string_move[2], string_move[3]);
-
-		move_int ^= int(from) + (int(to) << 6);
+		int promotion = 0;
+		int type = 0;
 		
 		if (string_move.size() == 5) { // Promotion?
-			move_int ^= (1 << 14);
+			type = 1;
 			string piece_finder = "nbrq";
-			move_int ^= (piece_finder.find(tolower(string_move[4])) << 12);
+			promotion = int(piece_finder.find(tolower(string_move[4])));
 		}
 
 		if (squares[from] == W_KING || squares[from] == B_KING) { // Castling?
 			if (get_file(from) == 4 &&
 				(get_file(to) == 2 || get_file(to) == 6)) {
-				move_int ^= (2 << 12);
+				type = 2;
 			}
 		}
 
-		if (to == undo_stack->enpassant) { // En passant?
+		if (to == undo_stack->enpassant && to != A1) { // En passant?
 			if (squares[from] == W_PAWN || squares[from] == B_PAWN) {
-				move_int ^= (3 << 12);
+				type = 3;
 			}
 		}
 
-		return Move(move_int);
+		return make_move(from, to, type, promotion);
 	}
 
-	void Position::do_move(Move m) {
-		Undo* new_undo = new Undo;
+	void Position::do_move(Move m, Undo* new_undo) {
 		memcpy(new_undo, undo_stack, sizeof(Undo));
 		new_undo->prev = undo_stack;
 		new_undo->fifty_move++;
 		new_undo->enpassant = Square(0);
+		new_undo->del = false;
 		
 		if (undo_stack->enpassant != Square(0)) {
 			new_undo->key ^= enpassant_keys[get_file(undo_stack->enpassant)];
@@ -297,31 +484,63 @@ namespace AGI {
 
 		Piece moved = squares[from];
 		Piece captured = squares[to];
-		remove(moved, from);
+		
 
 		if (captured != EMPTY) {
 			remove(captured, to);
+			new_undo->key ^= piece_keys[captured][to];
 			new_undo->fifty_move = 0;
 		}
 
 		// set castling rights
-		for (int i = 0; i < 4; i++) {
-			if (new_undo->castling_rights[i] & SquareBoard[from]) {
-				new_undo->castling_rights[i] = EmptyBoard;
-				new_undo->key ^= castle_keys[i];
-			}
-		}
-
+		new_undo->key ^= castle_keys[new_undo->castling_rights];
+		new_undo->castling_rights &= castling_helper[from] & castling_helper[to];
+		new_undo->key ^= castle_keys[new_undo->castling_rights];
+		
 		switch (get_movetype(m)) {
 		case 0: { // Normal
-			place(moved, to);
+			move_piece(moved, from, to);
+			new_undo->key ^= piece_keys[moved][from] ^ piece_keys[moved][to];
+
+			if (to_upiece(moved) == PAWN) {
+				// other stack variables
+				new_undo->pawn_key ^= piece_keys[moved][from] ^ piece_keys[moved][to];
+				new_undo->fifty_move = 0;
+
+				// set en passant square
+				Square epp;
+				if (side_to_move) {
+					if (from - to == 16) {
+						epp = Square(to + 8);
+						if (attacks_pawn<WHITE>(get_pieces(WHITE, PAWN)) & SquareBoard[epp]) {
+							new_undo->enpassant = epp;
+							new_undo->key ^= enpassant_keys[get_file(to)];
+						}
+					}
+				}
+				else {
+					if (to - from == 16) {
+						epp = Square(to - 8);
+						if (attacks_pawn<BLACK>(get_pieces(BLACK, PAWN)) & SquareBoard[epp]) {
+							new_undo->enpassant = epp;
+							new_undo->key ^= enpassant_keys[get_file(to)];
+						}
+					}
+				}
+			}
+
 			break;
 		}
 
 		case 1: { // Promotion
+			remove(moved, from);
+			new_undo->key ^= piece_keys[moved][from];
+			new_undo->pawn_key ^= piece_keys[moved][from];
 			// change moved to promoted piece
-			moved = side_to_move ? Piece(get_promotion(m) + 8) : Piece(get_promotion(m));
+			moved = to_piece(get_promotion(m), side_to_move);
 			place(moved, to);
+			new_undo->key ^= piece_keys[moved][to];
+			new_undo->fifty_move = 0;
 			break;
 		}
 
@@ -329,7 +548,7 @@ namespace AGI {
 			// do castling
 			Square rook_from, rook_to;
 			Piece rook = to_piece(ROOK, side_to_move);
-			if (get_file(to) > 5) {
+			if (get_file(to) > 4) {
 				// Kingside
 				rook_from = Square(to + 1);
 				rook_to = Square(to - 1);
@@ -339,42 +558,143 @@ namespace AGI {
 				rook_from = Square(to - 2);
 				rook_to = Square(to + 1);
 			}
-			remove(rook, rook_from);
-			place(rook, rook_to);
-			place(moved, to);
+			move_piece(moved, from, to);
+			move_piece(rook, rook_from, rook_to);
+			undo_stack->key ^= piece_keys[moved][from] ^ piece_keys[moved][to]
+				^ piece_keys[rook][rook_from] ^ piece_keys[rook][rook_to];
 			break;
 		}
 
 		case 3: { // En Passant
 			Square captured_square = side_to_move ? Square(to + 8) : Square(to - 8);
-			remove(to_piece(PAWN, ~side_to_move), captured_square);
-			place(moved, to);
+			Piece captured_pawn = to_piece(PAWN, ~side_to_move);
+			remove(captured_pawn, captured_square);
+			move_piece(moved, from, to);
+			Key k = piece_keys[captured_pawn][captured_square]
+				^ piece_keys[moved][from] ^ piece_keys[moved][to];
+			new_undo->key ^= k;
+			new_undo->pawn_key ^= k;
 			break;
 		}
 		}
 
-		if (to_upiece(moved) == PAWN) {
-			// set en passant square
-			if (side_to_move) {
-				if (to - from == 16) { 
-					new_undo->enpassant = Square(to - 8);
-					//new_undo->key ^= enpassant_keys[get_file(to)];
-				}
-			}
-			else {
-				if (from - to == 16) { 
-					new_undo->enpassant = Square(to + 8);
-					//new_undo->key ^= enpassant_keys[get_file(to)];
-				}
-			}
-			new_undo->fifty_move = 0;
+		if (to_upiece(moved) == KING) {
+			new_undo->king_square[side_to_move] = to;
 		}
 
 		side_to_move = ~side_to_move;
 		new_undo->key ^= side_to_move_key;
 
 		new_undo->captured = captured;
+		new_undo->checkers = 
+			get_attackers(lsb_square(get_pieces(side_to_move, KING)), ~pieces[EMPTY]) 
+			& colors[~side_to_move];
+
+		// set repetition
+		Undo* p = new_undo;
+		new_undo->repetition = 0;
+		int dist = 0;
+		while ((p->prev != nullptr) && p->prev->fifty_move == p->fifty_move - 1) {
+			dist++;
+			if (new_undo->key == p->prev->key) {
+				new_undo->repetition = (p->prev->repetition == 0) ? dist :
+					(p->prev->repetition > 0) ? -dist : -dist - 1024;
+				break;
+			}
+			p = p->prev;
+		}
 	}
 
+	void Position::undo_move(Move m) {
+		Square from = get_from(m);
+		Square to = get_to(m);
 
+		Piece moved = squares[to];
+		Piece captured = undo_stack->captured;
+
+		side_to_move = ~side_to_move;
+		
+
+		switch (get_movetype(m)) {
+		case 0: { // Normal
+			move_piece(moved, to, from);
+			break;
+		}
+
+		case 1: { // Promotion
+			remove(moved, to);
+			moved = to_piece(PAWN, side_to_move);
+			place(moved, from);
+			break;
+		}
+
+		case 2: { // Castle
+			// do castling
+			Square rook_from, rook_to;
+			Piece rook = to_piece(ROOK, side_to_move);
+			if (get_file(to) > 4) {
+				// Kingside
+				rook_from = Square(to + 1);
+				rook_to = Square(to - 1);
+			}
+			else {
+				// Queenside
+				rook_from = Square(to - 2);
+				rook_to = Square(to + 1);
+			}
+			move_piece(moved, to, from);
+			move_piece(rook, rook_to, rook_from);
+			break;
+		}
+
+		case 3: { // En Passant
+			Square captured_square = side_to_move ? Square(to + 8) : Square(to - 8);
+			place(to_piece(PAWN, ~side_to_move), captured_square);
+			move_piece(moved, to, from);
+			break;
+		}
+		}
+
+		if (captured != EMPTY) {
+			place(captured, to);
+		}
+
+		pop_stack();
+	}
+
+	void Position::do_null_move(Undo* new_undo) {
+		memcpy(new_undo, undo_stack, sizeof(Undo));
+		new_undo->prev = undo_stack;
+		new_undo->enpassant = Square(0);
+		new_undo->del = false;
+
+		if (undo_stack->enpassant != Square(0)) {
+			new_undo->key ^= enpassant_keys[get_file(undo_stack->enpassant)];
+		} // unset en passant key
+		undo_stack = new_undo;
+
+		side_to_move = ~side_to_move;
+		new_undo->key ^= side_to_move_key;
+
+		new_undo->captured = EMPTY;
+		new_undo->checkers = EmptyBoard;
+
+		// set repetition
+		new_undo->repetition = 0;
+	}
+
+	void Position::undo_null_move() {
+		side_to_move = ~side_to_move;
+		pop_stack();
+	}
+
+	Position& Position::operator=(const Position board) {
+		clear_stack();
+		delete undo_stack;
+		memcpy(this, &board, sizeof(Position));
+		undo_stack = new Undo;
+		memcpy(undo_stack, board.undo_stack, sizeof(Undo));
+		undo_stack->prev = nullptr;
+		return *this;
+	}
 }

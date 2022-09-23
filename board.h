@@ -2,6 +2,15 @@
 #define BOARD_INCLUDED
 
 #include <cstdint>
+#include <iostream>
+
+#ifdef WINDOWS
+#include <nmmintrin.h>
+#include <immintrin.h>
+#include <intrin.h>
+#else
+#include <x86intrin.h>
+#endif
 
 #include "pieces.h"
 
@@ -19,6 +28,8 @@ namespace AGI {
 		SQ_END
 	};
 
+	inline Square operator+(Square s, int i) { return Square(int(s) + i); }
+	inline Square operator-(Square s, int i) { return Square(int(s) - i); }
 	inline Square& operator++(Square& s) { return s = Square(int(s) + 1); }
 	inline Square& operator+=(Square& s, int i) { return s = Square(int(s) + i); }
 
@@ -26,6 +37,9 @@ namespace AGI {
 
 	inline int get_file(Square s) { return s & 7; }
 	inline int get_rank(Square s) { return s >> 3; }
+	inline Square mirror(Square s) { return Square(s ^ 56); }
+
+	ostream& operator<<(ostream& os, Square s);
 
 	// Use 16bit integer for moves - 0bXXAABBBBBBCCCCCC
 	// C: 6 bits indicating from square
@@ -36,9 +50,15 @@ namespace AGI {
 		NULL_MOVE = 0
 	};
 
+	ostream& operator<<(ostream& os, Move m);
+
+	inline Move make_move(Square from, Square to, int type = 0, int promotion = 0) {
+		return Move(from | (to << 6) | (promotion << 12) | (type << 14));
+	}
+
 	inline constexpr Square get_from(Move m) { return Square(m & 0x3F); }
 	inline constexpr Square get_to(Move m)   { return Square((m >> 6) & 0x3F); }
-	inline constexpr UPiece get_promotion(Move m) { return UPiece((m >> 12) & 3 + KNIGHT); }
+	inline constexpr UPiece get_promotion(Move m) { return UPiece(((m >> 12) & 3) + KNIGHT); }
 	inline constexpr int get_movetype(Move m) { return (m >> 14); }
 
 	typedef uint64_t Bitboard;
@@ -46,11 +66,162 @@ namespace AGI {
 	constexpr Bitboard FullBoard  = ~EmptyBoard;
 	
 	extern Bitboard SquareBoard[64];
-	extern Bitboard CastlingFrom[4];
+	extern Bitboard PseudoAttacks[7][64];
+	extern Bitboard Rays[64][64];
+	extern int Distance[64][64];
+
+	constexpr Bitboard FileBoard[8] = {
+		0x0101010101010101ULL,
+		0x0101010101010101ULL << 1,
+		0x0101010101010101ULL << 2,
+		0x0101010101010101ULL << 3,
+		0x0101010101010101ULL << 4,
+		0x0101010101010101ULL << 5,
+		0x0101010101010101ULL << 6,
+		0x0101010101010101ULL << 7
+	};
+
+	constexpr Bitboard RankBoard[8] = {
+		0xFFULL      , 0xFFULL << 8 , 0xFFULL << 16, 0xFFULL << 24,
+		0xFFULL << 32, 0xFFULL << 40, 0xFFULL << 48, 0xFFULL << 56
+	};
+
+	constexpr Bitboard LightSquares = 0x55AA55AA55AA55AAULL;
+	constexpr Bitboard DarkSquares = ~LightSquares;
+
+	constexpr Bitboard CenterFiles = FileBoard[3] | FileBoard[4];
+	constexpr Bitboard BoardEdges = FileBoard[0] | FileBoard[7] | RankBoard[0] | RankBoard[7];
+	constexpr Bitboard White6L = FullBoard >> 16;
+	constexpr Bitboard Black6L = FullBoard << 16;
+
+	inline Bitboard get_fileboard(Square s) { return FileBoard[get_file(s)]; }
+	inline Bitboard get_rankboard(Square s) { return RankBoard[get_rank(s)]; }
+	inline Bitboard get_forward(Color c, Square s) {
+		return c ? ~RankBoard[7] >> (8 * (7 ^ get_rank(s))) :
+				   ~RankBoard[0] << (8 * get_rank(s));
+	}
+
+	void print(ostream& os, Bitboard b);
+
+	inline int popcount(Bitboard b) {
+		return (int)_mm_popcnt_u64(b);
+	}
+
+	inline Bitboard pext(Bitboard b, Bitboard r) {
+		return (Bitboard)_pext_u64(b, r);
+	}
+
+	inline Square lsb_square(Bitboard b) {
+#ifdef WINDOWS
+		unsigned long _index = 0;
+		_BitScanForward64(&_index, b);
+		return Square(_index);
+#else
+		return Square(__builtin_ctzll(b));
+#endif
+	}
+
+	inline Square pop_lsb(Bitboard* b) {
+		Square s = lsb_square(*b);
+		*b &= *b - 1;
+		return s;
+	}
+
+	inline Bitboard shift(Bitboard b, int shift) {
+		switch (shift) {
+		case -9: {
+			return (b & ~FileBoard[0]) >> 9;
+		}
+		case -8: {
+			return b >> 8;
+		}
+		case -7: {
+			return (b & ~FileBoard[7]) >> 7;
+		}
+		case -1: {
+			return (b & ~FileBoard[0]) >> 1;
+		}
+		case 1: {
+			return (b & ~FileBoard[7]) << 1;
+		}
+		case 7: {
+			return (b & ~FileBoard[0]) << 7;
+		}
+		case 8: {
+			return b << 8;
+		}
+		case 9: {
+			return (b & ~FileBoard[7]) << 9;
+		}
+		default: {
+			return 0;
+		}
+		}
+	}
+
+	inline Bitboard adj_fileboard(Square s) {
+		return shift(get_fileboard(s), 1) | shift(get_fileboard(s), -1);
+	}
+
+	struct Attacks {
+		Bitboard relevant;
+		Bitboard* attacks;
+	};
+
+	extern Attacks BishopAttacks[64];
+	extern Attacks RookAttacks[64];
+
+	inline Bitboard index_attack(Attacks a, Bitboard occupied) {
+		return a.attacks[pext(occupied, a.relevant)];
+	}
+
+	template<Color side>
+	Bitboard attacks_pawn(Bitboard b) {
+		switch (side) {
+		case WHITE: {
+			return shift(b, 7) | shift(b, 9);
+		}
+		case BLACK: {
+			return shift(b, -7) | shift(b, -9);
+		}
+		default:
+			return 0;
+		}
+	}
+
+	template<Color side>
+	Bitboard attacks_pawn(Square s) {
+		return PseudoAttacks[int(side)][s];
+	}
+
+	template<UPiece attacker>
+	Bitboard attacks(Square s, Bitboard occupied) {
+		switch (attacker) {
+		case KNIGHT: {
+			return PseudoAttacks[KNIGHT][s];
+		}
+		case BISHOP: {
+			return index_attack(BishopAttacks[s], occupied);
+		}
+		case ROOK: {
+			return index_attack(RookAttacks[s], occupied);
+		}
+		case QUEEN: {
+			return index_attack(BishopAttacks[s], occupied) 
+				 | index_attack(RookAttacks[s], occupied);
+		}
+		case KING: {
+			return PseudoAttacks[KING][s];
+		}
+		default:
+			return 0;
+		}
+	}
 
 	namespace Board {
 		void init();
 	}
+	
 }
 
 #endif
