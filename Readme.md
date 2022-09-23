@@ -1,7 +1,7 @@
 # AGIZero
 Chess engine
 (https://lichess.org/@/TheAGI/)
-(https://naagicode.com)
+(http://naagicode.com)
 
 Started as AGI
 which stands for nothing
