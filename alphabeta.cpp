@@ -31,8 +31,12 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 	}
 
 	else { 
-		int delta =  board.get_material_t() <= 4000 ? ENDGAME_DELTA : MIDDLEGAME_DELTA;
-		delta += INCREMENT_DELTA * ply;
+		int delta = DEFAULT_DELTA + INCREMENT_DELTA * ply;
+		int ply_low = ply / 3;
+		if (board.get_material_t() <= 4000) {
+			delta += ENDGAME_DELTA;
+			//ply_low = ply / 2;
+		}
 
 		// Move Generation
 		MoveList legal_moves;
@@ -63,7 +67,7 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 			int new_eval = EVAL_INIT;
 			int new_depth = 0;
 			int currdepth = 0;
-			int reduction = table_miss ? ply / 3 : ply - 1;
+			int reduction = table_miss ? ply_low : ply - 1;
 			bool nmove_draw = false;
 
 			index = legal_moves.find_index(nmove);
@@ -71,6 +75,12 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 			while ((table_miss || i < legal_moves.length()) && !(*stop)) {
 				index = index % legal_moves.length();
 				m = *(legal_moves.list + index);
+
+				//if (board.capture_or_promotion(m) ||
+				//	board.is_passed_pawn_push(m, board.get_side())) {
+				//	reduction += 3;
+				//	if (reduction > ply - 1) { reduction = ply - 1; }
+				//}
 
 				if (i == legal_moves.length()) {
 					reduction = ply - 1;
@@ -103,7 +113,7 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 				board.undo_move(m);
 				i++;
 				index += step;
-				reduction = ply / 3;
+				reduction = ply_low;
 			}
 
 			if (!(*stop)) {

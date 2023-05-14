@@ -15,6 +15,7 @@ namespace AGI {
 			 << "option name LichessTiming type check default false\n"
 			 << "option name Ponder type check default false\n"
 			 << "option name Contempt type spin default 0 min 0 max 100\n"
+			 << "option name Strength type spin default 100 min 0 max 100\n"
 			 << endl;
 	}
 
@@ -98,6 +99,16 @@ namespace AGI {
 				}
 			}
 
+			else if (word == "Strength") {
+				ss >> word;
+				if (word == "value") {
+					int s;
+					ss >> s;
+					if (s > 100) { s = 100; }
+					else if (s < 0) { s = 0; }
+					strength = s;
+				}
+			}
 		}
 	}
 }

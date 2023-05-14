@@ -7,7 +7,7 @@ namespace AGI {
 	constexpr int NULL_DEPTH = 1;
 	constexpr int QUIESCENCE_DEPTH = 2;
 	constexpr int DEFAULT_PLY = 1;
-	constexpr int MIDDLEGAME_DELTA = 100;
+	constexpr int DEFAULT_DELTA = 100;
 	constexpr int ENDGAME_DELTA = 500;
 	constexpr int INCREMENT_DELTA = 22;
 

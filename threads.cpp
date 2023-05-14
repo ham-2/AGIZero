@@ -23,7 +23,7 @@ namespace AGI {
 				currdepth = Threads.depth + 1;
 				alpha_beta(*(t->board), &Threads.stop,
 					currdepth, &probed,
-					t->board->get_side(), false, t->step);
+					t->board->get_side(), t->step);
 			}
 		}
 

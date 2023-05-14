@@ -104,7 +104,10 @@ namespace AGI {
 			return (popcount(FileBoard[get_file(s)] & pieces[PAWN] & colors[~c]) == 1);
 		}
 		inline bool is_passed_pawn(Square s, Color c) {
-			return !bool(get_forward(c, s) & (get_fileboard(s) | adj_fileboard(s)) & pieces[PAWN]);
+			return !bool(get_forward(c, s) & (get_fileboard(s) | adj_fileboard(s)) & pieces[PAWN] & colors[~c]);
+		}
+		inline bool is_passed_pawn_push(Move m, Color c) {
+			return bool(get_from(m) & pieces[PAWN]) && is_passed_pawn(get_from(m), c);
 		}
 		inline bool capture_or_promotion(Move m) {
 			return get_movetype(m) == 0 ? squares[get_to(m)] != EMPTY : get_movetype(m) != 2;
