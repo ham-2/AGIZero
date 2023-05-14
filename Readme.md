@@ -1,10 +1,7 @@
 # AGIZero
 Chess engine
 (https://lichess.org/@/TheAGI/)
-(http://naagicode.com)
-
-Started as AGI
-which stands for nothing
+(https://naagicode.com)
 
 requires PEXT (BMI2)!
 
