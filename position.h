@@ -112,6 +112,9 @@ namespace AGI {
 		inline bool capture_or_promotion(Move m) {
 			return get_movetype(m) == 0 ? squares[get_to(m)] != EMPTY : get_movetype(m) != 2;
 		}
+		inline bool material_capture(Move m) {
+			return to_upiece(squares[get_to(m)]) > to_upiece(squares[get_from(m)]);
+		}
 		int see(Move m);
 		bool is_check(Move m);
 

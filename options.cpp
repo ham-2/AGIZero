@@ -104,9 +104,14 @@ namespace AGI {
 				if (word == "value") {
 					int s;
 					ss >> s;
-					if (s > 100) { s = 100; }
-					else if (s < 0) { s = 0; }
-					strength = s;
+					if (s > 99) { limit_strength = false; s = 100; }
+					else {
+						if (s < 0) { s = 0; }
+						limit_strength = true;
+						max_noise = 60 - 1200 / (120 - s) + (100 - s) * (100 - s) / 16;
+					}
+					material_bias = 100 - s;
+					material_init();
 				}
 			}
 		}

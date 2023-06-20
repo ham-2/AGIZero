@@ -13,7 +13,6 @@ namespace AGI {
 	bool ponder = false;
 	bool lichess_timing = false;
 	atomic<bool> ponder_continue(false);
-	int strength = 100;
 
 	void get_time(istringstream& ss, Color c, float& time, float& max_time, bool& force_time, int& max_ply) {
 		string word;
@@ -176,8 +175,8 @@ namespace AGI {
 		Threads.threads[0]->m.unlock();
 		Threads.sync();
 
-		// limit strength
-		if (strength < 100) {
+		// limit strength - capture preference
+		if (limit_strength && score > -10000 && score < 10000) {
 			MoveList legal_moves;
 			legal_moves.generate(*board);
 			int move_length = legal_moves.length();
@@ -185,8 +184,6 @@ namespace AGI {
 			Move m;
 			int comp_eval;
 			int best_eval = EVAL_INIT;
-			PRNG rng = PRNG(board->get_key() + node_count);
-			int max_noise = (100 - strength) / 2;
 
 			for (int i = 0; i < move_length; i++) {
 				m = *(legal_moves.list + i);
@@ -198,16 +195,9 @@ namespace AGI {
 
 				if (comp_eval == EVAL_FAIL) { continue; }
 
-				int disc = 0;
-
-				// eval noise
-				for (int j = 0; j < 5; j++) {
-					comp_eval += int(rng.get()) % max_noise;
-				}
-
 				// capture preference
-				if (board->capture_or_promotion(m)) {
-					comp_eval += max_noise;
+				if (board->material_capture(m)) {
+					comp_eval += material_bias;
 				}
 
 				if (comp_eval > best_eval) {

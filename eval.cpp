@@ -15,9 +15,9 @@ namespace AGI {
 
 	atomic<long> node_count(0);
 	bool limit_strength = false;
-	int ls_p_max = 0;
-	int material_bias = 0;
+	int max_noise = 0;
 	int contempt = 0;
+	PRNG rng = PRNG(3245356235923498ULL);
 
 	constexpr Score KnightOutpost  = S(PS[ 0],      0);
 	constexpr Score OpenFileRook   = S(PS[ 1], PS[ 2]);
@@ -387,8 +387,8 @@ namespace AGI {
 		cp_ += Tempo;
 
 		if (limit_strength) {
-			cp_ = cp_ * 100 / (100 + 2 * material_bias);
-			perturb_diff(cp_, ls_p_max);
+			cp_ = cp_ * 100 / (100 + material_bias);
+			add_noise(cp_);
 		}
 
 		return cp_;
@@ -544,9 +544,8 @@ namespace AGI {
 		}
 	}
 
-	int perturb_diff(int& eval, int max) {
-		eval += rand() % (max * 2 + 1) - max;
+	int add_noise(int& eval) {
+		eval += int(rng.get()) % max_noise;
 		return eval;
 	}
-
 }

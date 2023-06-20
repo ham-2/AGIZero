@@ -123,6 +123,7 @@ namespace AGI {
                                        S(0,  0), S(0 , 15), S(13, 26), S(22, 40), S(36, 55), S(65 ,  70), S(80 ,  70), S(0,  0) };
 
 	extern Score piece_table[15][64];
+    extern int material_bias;
 
 	void material_init();
 }

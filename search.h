@@ -4,7 +4,7 @@
 #include <cmath>
 #include <sstream>
 
-#include "misc.h"
+#include "eval.h"
 #include "position.h"
 #include "threads.h"
 
@@ -22,7 +22,6 @@ namespace AGI {
 	extern bool ponder;
 	extern bool lichess_timing;
 	extern atomic<bool> ponder_continue;
-	extern int strength;
 }
 
 #endif
