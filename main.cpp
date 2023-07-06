@@ -57,6 +57,7 @@ int main() {
 				ss >> word; // "moves"
 			}
 
+			Threads.stop = true;
 			Threads.acquire_lock();
 			Threads.set_all(fen);
 			if (word == "moves") {
