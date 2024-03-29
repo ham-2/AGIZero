@@ -108,7 +108,9 @@ namespace AGI {
 					else {
 						if (s < 0) { s = 0; }
 						limit_strength = true;
-						max_noise = 60 - 1200 / (120 - s) + (100 - s) * (100 - s) / 16;
+						max_noise = 60 - 1200 / (120 - s) 
+							+ (100 - s) * 2
+							+ (100 - s) * (100 - s) / 32;
 					}
 					material_bias = 100 - s;
 					material_init();

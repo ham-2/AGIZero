@@ -545,7 +545,10 @@ namespace AGI {
 	}
 
 	int add_noise(int& eval) {
-		eval += int(rng.get()) % max_noise;
+		eval += (int(rng.get()) % max_noise
+			+ int(rng.get()) % max_noise
+			+ int(rng.get()) % max_noise
+			+ int(rng.get()) % max_noise) / 4;
 		return eval;
 	}
 }
