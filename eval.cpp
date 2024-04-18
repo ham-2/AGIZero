@@ -19,17 +19,17 @@ namespace AGI {
 	int contempt = 0;
 	PRNG rng = PRNG(3245356235923498ULL);
 
-	constexpr Score KnightOutpost  = S(PS[ 0],      0);
-	constexpr Score OpenFileRook   = S(PS[ 1], PS[ 2]);
-	constexpr Score StuckRook      = S(PS[ 3], PS[ 4]);
-	constexpr Score BlockedPawn    = S(PS[ 5], PS[ 6]);
+	constexpr Score KnightOutpost = S(PS[0], 0);
+	constexpr Score OpenFileRook = S(PS[1], PS[2]);
+	constexpr Score StuckRook = S(PS[3], PS[4]);
+	constexpr Score BlockedPawn = S(PS[5], PS[6]);
 	//constexpr Score PinnedQueen    = S(PS[ 7],      0); unused
-	constexpr Score ConnectedRook  = S(PS[ 8], PS[ 8]);
-	constexpr Score AttackImba     = S(PS[ 9],      0);
-	constexpr Score SemiOpenRook   = S(PS[10], PS[11]);
+	constexpr Score ConnectedRook = S(PS[8], PS[8]);
+	constexpr Score AttackImba = S(PS[9], 0);
+	constexpr Score SemiOpenRook = S(PS[10], PS[11]);
 	//constexpr Score ShieldedMinor  = S(PS[12], PS[13]); unused
 
-	constexpr Score BishopPair     = S(LD[ 2], LD[ 3]);
+	constexpr Score BishopPair = S(LD[2], LD[3]);
 
 	int end_eval(Position& board) {
 
@@ -70,7 +70,7 @@ namespace AGI {
 		bool B_LSB = black_bishops & LightSquares;
 		bool B_DSB = black_bishops & DarkSquares;
 		Color side = board.get_side();
-		
+
 		// King Safety Adjustment
 		int white_attacker_value = KS[11];
 		int black_attacker_value = KS[11];
@@ -81,6 +81,15 @@ namespace AGI {
 		// MG / EG specific Calculations
 		if (mg != 0) {
 			int pscr = 0;
+
+			//
+			if (shift(w_pawns & (CenterFiles | FileBoard[2]) & RankBoard[1], 8) & occupied) {
+				pscr -= MG[3];
+			}
+			if (shift(b_pawns & (CenterFiles | FileBoard[2]) & RankBoard[6], -8) & occupied) {
+				pscr += MG[3];
+			}
+
 			// Castling Rights, Kings on Center
 			if ((white_king & CenterFiles) && !board.has_castling_rights(WHITE)) {
 				pscr -= MG[0]; white_attacker_value += KS[8];
@@ -290,7 +299,7 @@ namespace AGI {
 			if (control & white_k_adj) { white_attacker_value -= KS[7]; }
 
 			// Activity
-			score += Activity[2] * popcount(control & Black6L);
+			score += Activity[3] * popcount(control & Black6L);
 		}
 		while (black_queens) {
 			s = pop_lsb(&black_queens);
@@ -300,7 +309,7 @@ namespace AGI {
 			if (control & black_k_adj) { black_attacker_value -= KS[7]; }
 
 			// Activity
-			score -= Activity[2] * popcount(control & White6L);
+			score -= Activity[3] * popcount(control & White6L);
 		}
 
 		if (mg < 64) { // King to Passed Pawns / Pawns
@@ -332,7 +341,7 @@ namespace AGI {
 		score += BlockedPawn * popcount(shift(b_pawns, -8) & occupied);
 
 		// Space Advantage
-		score += Activity[3] * (popcount(w_space) - popcount(b_space));
+		score += Activity[4] * (popcount(w_space) - popcount(b_space));
 
 		// Attack Imbalance
 		score += AttackImba * attack_imbalance;
@@ -531,7 +540,10 @@ namespace AGI {
 	}
 
 	string eval_print(int eval) {
-		if (eval > 20000) {
+		if (eval >= EVAL_FAIL || eval <= -EVAL_FAIL) {
+			return "cp 0";
+		}
+		else if (eval > 20000) {
 			int ply_to_mate = EVAL_WIN - eval;
 			return "mate " + to_string((ply_to_mate + 1) / 2);
 		}
@@ -550,5 +562,9 @@ namespace AGI {
 			+ int(rng.get()) % max_noise
 			+ int(rng.get()) % max_noise) / 4;
 		return eval;
+	}
+
+	int volatility_eval(Position& board) {
+		return 0;
 	}
 }

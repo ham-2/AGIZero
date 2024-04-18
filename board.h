@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <iostream>
 
+#define WINDOWS
+
 #ifdef WINDOWS
 #include <nmmintrin.h>
 #include <immintrin.h>

@@ -10,9 +10,13 @@ using namespace std;
 namespace AGI {
 
 	bool ATM = false;
-	bool ponder = false;
 	bool lichess_timing = false;
+	bool stop_if_mate = true;
+
+	bool ponder = false;
 	atomic<bool> ponder_continue(false);
+
+	int multipv = 1;
 
 	void get_time(istringstream& ss, Color c, float& time, float& max_time, bool& force_time, int& max_ply) {
 		string word;
@@ -91,14 +95,8 @@ namespace AGI {
 	{
 		Threads.stop = false;
 		
-		int score = 0;
-		int currdepth = 0;
-		int maxdepth = 0;
-		int bmove_c = 0;
-		int f_i = 0;
+		int multipv_max = multipv;
 		Move bmove = NULL_MOVE;
-		Move cmove;
-		Move ccmove = NULL_MOVE;
 		atomic<bool>* complete = new atomic<bool>;
 		*complete = false;
 		condition_variable* print_cond = new condition_variable;
@@ -112,58 +110,74 @@ namespace AGI {
 
 		Main_TT.clear_entry(board->get_key());
 		Threads.depth.exchange(DEFAULT_PLY);
-		currdepth = Threads.depth - 1;
 
 		// Start parallel search
 		Threads.t_wait.notify_all();
-		
 		Threads.threads[0]->m.lock();
+
+		TTEntry probe = {};
+		Main_TT.probe(board->get_key(), &probe);
+
 		while (Threads.depth <= max_ply) {
 			alpha_beta(*board, &(Threads.stop),
-				Threads.depth, &currdepth,
+				Threads.depth, &probe,
 				board->get_side(), t->step);
 
-			//Forced Stop
+			// MultiPV search
+			//if (multipv_max > 1) {
+			//	// Move Generation
+			//	MoveList legal_moves;
+			//	legal_moves.generate(*board);
+			//	if (legal_moves.length() < multipv_max) { multipv_max = legal_moves.length(); }
+			//	vector<pair<Move, int>> pvmoves(legal_moves.length());
+
+			//	// Update scores
+			//	for (int i = 0; i < legal_moves.length(); i++) {
+			//		Undo u;
+			//		Move m = *(legal_moves.list + i);
+			//		board->do_move(m, &u);
+			//		TTEntry probe = {};
+			//		if (Main_TT.probe(Threads.board->get_key(), &probe) == EVAL_FAIL) {
+			//			pvmoves[i] = make_pair(m, -EVAL_FAIL);
+			//		}
+			//		else {
+			//			pvmoves[i] = make_pair(m, -probe.eval);
+			//		}
+			//		board->undo_move(m);
+			//	}
+
+			//	// Find top moves
+			//	sort(pvmoves.begin(), pvmoves.end(), compare);
+
+			//	// Search Top Moves
+			//	for (int i = 1; i < multipv_max; i++) {
+			//		Undo u;
+			//		board->do_move(pvmoves[i].first, &u);
+			//		
+			//		alpha_beta(*board, &(Threads.stop),
+			//			Threads.depth - 1,
+			//			board->get_side(), t->step);
+
+			//		board->undo_move(pvmoves[i].first);
+			//	}
+			//}
+			
+			// Forced Stop
 			if (Threads.stop) { break; }
 
-			// Get candidate move
-			score = Main_TT.probe(board->get_key(), 0, &cmove);
-			// Reset TTEntry if probe fails
-			if (score == EVAL_FAIL) { Main_TT.clear_entry(board->get_key()); continue; }
-
-			// Break if mate
-			if (score > 29000 || score < -29000) {
-				bmove = cmove;
-				if (time == -1) {
-					int ply_to_mate = 20000;
-					if (score > 0) {
-						ply_to_mate = EVAL_WIN - score;
-					}
-					else if (score < 0) {
-						ply_to_mate = score + EVAL_WIN;
-					}
-					if (Threads.depth > 3 * ply_to_mate) { break; }
-				}
-				else { break; }
+			// probe & reset if fail
+			if (Main_TT.probe(board->get_key(), &probe) == EVAL_FAIL) {
+				Main_TT.clear_entry(board->get_key()); continue;
 			}
 
-			if (cmove != bmove && cmove == ccmove) { bmove_c++; }
-			else { bmove_c = 0; }
-			ccmove = cmove;
-			if (currdepth > maxdepth) { maxdepth = currdepth; }
+			// Stop if mate
+			if (stop_if_mate && (probe.eval > 29000 || probe.eval < -29000)) {
+				break;
+			}
 
-			// Choose best move & Depth
-			if (bmove_c > BMOVE_CHANGE && currdepth > maxdepth / 2) { bmove = cmove; }
-			if (currdepth >= Threads.depth) {
-				bmove = cmove;
-				Threads.depth++;
-				f_i = 0;
-				print_cond->notify_all(); // Print
-			}
-			else if (f_i++ > 32 * Threads.depth) {
-				Threads.depth++;
-				f_i = 0;
-			}
+			// Print and search again
+			Threads.depth++;
+			print_cond->notify_all();
 		}
 
 		// terminate print thread
@@ -175,43 +189,45 @@ namespace AGI {
 		Threads.threads[0]->m.unlock();
 		Threads.sync();
 
-		// limit strength - capture preference
-		if (limit_strength && score > -10000 && score < 10000) {
-			MoveList legal_moves;
-			legal_moves.generate(*board);
-			int move_length = legal_moves.length();
+		//// limit strength - capture preference
+		//if (limit_strength && score > -10000 && score < 10000) {
+		//	MoveList legal_moves;
+		//	legal_moves.generate(*board);
+		//	int move_length = legal_moves.length();
 
-			Move m;
-			int comp_eval;
-			int best_eval = EVAL_INIT;
+		//	Move m;
+		//	int comp_eval;
+		//	int best_eval = EVAL_INIT;
 
-			for (int i = 0; i < move_length; i++) {
-				m = *(legal_moves.list + i);
+		//	for (int i = 0; i < move_length; i++) {
+		//		m = *(legal_moves.list + i);
 
-				Undo u;
-				board->do_move(m, &u);
-				comp_eval = -Main_TT.probe(board->get_key(), 0);
-				board->undo_move(m);
+		//		Undo u;
+		//		board->do_move(m, &u);
+		//		comp_eval = -Main_TT.probe(board->get_key(), 0);
+		//		board->undo_move(m);
 
-				if (comp_eval == EVAL_FAIL) { continue; }
+		//		if (comp_eval == EVAL_FAIL) { continue; }
 
-				// capture preference
-				if (board->material_capture(m)) {
-					comp_eval += material_bias;
-				}
+		//		// capture preference
+		//		if (board->material_capture(m)) {
+		//			comp_eval += material_bias;
+		//		}
 
-				if (comp_eval > best_eval) {
-					bmove = m;
-					best_eval = comp_eval;
-				}
-			}
-		}
+		//		if (comp_eval > best_eval) {
+		//			bmove = m;
+		//			best_eval = comp_eval;
+		//		}
+		//	}
+		//}
 
 		// Print Bestmove
-		std::cout << "bestmove " << move(bmove) << endl;		
+		Threads.acquire_cout();
+		cout << "bestmove " << move(probe.nmove) << endl;		
+		Threads.release_cout();
 
 		// Ponder
-		if (ponder_continue && !(score > 29000 || score < -29000)) {
+		if (ponder_continue && !(probe.eval > 29000 || probe.eval < -29000)) {
 			Threads.do_move(bmove);
 			Threads.depth.exchange(DEFAULT_PLY);
 			Threads.stop = false;
@@ -221,19 +237,16 @@ namespace AGI {
 			Threads.t_wait.notify_all();
 
 			Threads.threads[0]->m.lock();
+
+			TTEntry probe_ponder = {};
+			Main_TT.probe(board->get_key(), &probe_ponder);
 			while (Threads.depth <= max_ply && !Threads.stop) {
 				alpha_beta(*board, &(Threads.stop),
-					Threads.depth, &currdepth,
-					board->get_side(), t->step);
+					Threads.depth, &probe_ponder,
+					~(board->get_side()), t->step);
 
-				// Break if mate
-				if (score > 29000 || score < -29000) { break; }
-
-				if (currdepth >= Threads.depth || f_i > 32 * Threads.depth) {
-					++Threads.depth;
-					f_i = 0;
-				}
-				else { f_i++; }
+				Main_TT.probe(board->get_key(), &probe_ponder);
+				++Threads.depth;
 			}
 
 			Threads.stop = true;

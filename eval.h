@@ -23,6 +23,8 @@ namespace AGI {
 
 	string eval_print(int eval);
 
+	int volatility_eval(Position& board);
+
 	inline void inc_mate(int& eval) {
 		if (eval > 10000) { eval++; }
 		else if (eval < -10000) { eval--; }

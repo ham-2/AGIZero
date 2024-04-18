@@ -7,9 +7,9 @@ namespace AGI {
 	constexpr int NULL_DEPTH = 1;
 	constexpr int QUIESCENCE_DEPTH = 2;
 	constexpr int DEFAULT_PLY = 1;
-	constexpr int DEFAULT_DELTA = 100;
-	constexpr int ENDGAME_DELTA = 500;
-	constexpr int INCREMENT_DELTA = 22;
+	constexpr int DEFAULT_DELTA = 50;
+	constexpr int ENDGAME_DELTA = 300;
+	constexpr int INCREMENT_DELTA = 25;
 
 	constexpr int TABLE_MB_DEFAULT = 64;
 	constexpr int TABLE_MB_MAX = 4096;
@@ -36,9 +36,11 @@ namespace AGI {
 	constexpr int NULLMOVE_MAX_PLY = 8;
 	constexpr int MAX_REDUCTION_PLY = 8;
 
+	constexpr int PV_DEPTH_REDUCTION = 20;
+
 	// Model
 	constexpr int PS[14] = { 39, 28, 24, 7, 14, 8, 12, 29, 12, 19, 18, 20, 16, 11 };
-	constexpr int MG[8] = { 16, 21, 8, 10, 10, 13, 0, 12 }; // 4, 5, 7th not used
+	constexpr int MG[8] = { 16, 21, 8, 40, 10, 13, 0, 12 }; // 4, 5, 7th not used
 	constexpr int EG[4] = { 12, 9, 5, 19 };
 	constexpr int LD[4] = { 3, 1, 19, 7 }; // 2nd not used
 	constexpr int PN[8] = { 8, 25, 5, 36, 11, 16, 12, 26 };

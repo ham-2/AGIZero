@@ -9,14 +9,18 @@ namespace AGI {
 	std::string DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 	void print_option() {
+		Threads.acquire_cout();
 		cout << "option name Threads type spin default " << 1 << " min 1 max " << SEARCH_THREADS_MAX << "\n"
 			 << "option name Hash type spin default " << TABLE_MB_DEFAULT << " min " << TABLE_MB_DEFAULT << " max " << TABLE_MB_MAX << "\n"
 			 << "option name PawnTable type spin default " << PAWN_TABLE_MB_DEFAULT << " min 0 max " << PAWN_TABLE_MB_MAX << "\n"
 			 << "option name LichessTiming type check default false\n"
 			 << "option name Ponder type check default false\n"
+			 << "option name Stopifmate type check default true\n"
 			 << "option name Contempt type spin default 0 min 0 max 100\n"
 			 << "option name Strength type spin default 100 min 0 max 100\n"
+			 << "option name MultiPV type spin default 1 min 1 max 16\n"
 			 << endl;
+		Threads.release_cout();
 	}
 
 	void set_option(istringstream& ss) {
@@ -114,6 +118,30 @@ namespace AGI {
 					}
 					material_bias = 100 - s;
 					material_init();
+				}
+			}
+
+			else if (word == "MultiPV") {
+				ss >> word;
+				if (word == "value") {
+					int s;
+					ss >> s;
+					if (s > 16) { s = 16; }
+					else if (s < 1) { s = 1; }
+					multipv = s;
+				}
+			}
+
+			else if (word == "Stopifmate") {
+				ss >> word;
+				if (word == "value") {
+					ss >> word;
+					if (word == "true") {
+						stop_if_mate = true;
+					}
+					else if (word == "false") {
+						stop_if_mate = false;
+					}
 				}
 			}
 		}

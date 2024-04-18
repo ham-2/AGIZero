@@ -13,7 +13,7 @@ namespace AGI {
 	
 	void lazy_smp(Thread* t) {
 		int currdepth;
-		int probed;
+		TTEntry probe = {};
 
 		while (!(t->kill)) {
 			unique_lock<mutex> m(t->m);
@@ -21,8 +21,10 @@ namespace AGI {
 
 			while (!Threads.stop) {
 				currdepth = Threads.depth + 1;
+
+				Main_TT.probe(t->board->get_key(), &probe);
 				alpha_beta(*(t->board), &Threads.stop,
-					currdepth, &probed,
+					currdepth, &probe,
 					t->board->get_side(), t->step);
 			}
 		}
@@ -86,6 +88,10 @@ namespace AGI {
 		}
 	}
 
+	void Threadmgr::acquire_cout() { cout_lock.lock(); }
+
+	void Threadmgr::release_cout() { cout_lock.unlock(); }
+
 	void Threadmgr::acquire_lock() {
 		for (int i = 0; i < threads.size(); i++) {
 			threads[i]->m.lock();
@@ -142,7 +148,7 @@ namespace AGI {
 
 	void Threadmgr::test_eval() {
 		cout << end_eval(*board) << " " << "\n";
-		cout << eval(*board, 3) << "\n";
+		//cout << eval(*board, 3) << "\n";
 	}
 
 	void Threadmgr::gen()

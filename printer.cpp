@@ -15,17 +15,19 @@ namespace AGI {
 
 	void getpv(ostream& os, Position* board, int& depth) {
 		string pv;
-		Move cmove = NULL_MOVE;
-		Main_TT.probe(board->get_key(), 0, &cmove);
-		if (cmove != NULL_MOVE) {
+		TTEntry probe = {};
+		Main_TT.probe(board->get_key(), &probe);
+		if (probe.nmove != NULL_MOVE) {
 			Undo u;
-			board->do_move(cmove, &u);
-			os << cmove << " ";
+			board->do_move(probe.nmove, &u);
+			os << probe.nmove << " ";
 			depth++;
 			getpv(os, board, depth);
-			board->undo_move(cmove);
+			board->undo_move(probe.nmove);
 		}
 	}
+
+	bool compare(pair<Move, int> a, pair<Move, int> b) { return a.second > b.second; }
 
 	void printer(float time, atomic<bool>* stop, condition_variable* cv, float max_time, bool force_time)
 	{
@@ -39,7 +41,15 @@ namespace AGI {
 		int score = 0;
 		int max_depth = 0;
 		int currdepth;
+		int nodes;
 		mutex mu;
+		int multipv_max = multipv;
+
+		// Move Generation
+		MoveList legal_moves;
+		legal_moves.generate(*Threads.board);
+		if (legal_moves.length() < multipv_max) { multipv_max = legal_moves.length(); }
+		vector<pair<Move, int>> pvmoves(legal_moves.length());
 
 		while (!(*stop)) {
 			time_now = system_clock::now();
@@ -57,6 +67,7 @@ namespace AGI {
 			// Limit Time
 			time_now = system_clock::now();
 			search_time = duration_cast<milliseconds>(time_now - time_start);
+			nodes = node_count;
 
 			if (force_time) { // Normal Search
 				if (time != -1 && search_time >= limit_time) {
@@ -66,38 +77,67 @@ namespace AGI {
 				}
 			}
 
-			if ((*stop)) { break; }
+			Threads.acquire_cout();
+			if (multipv_max > 1) {
+				// Update pvs
+				for (int i = 0; i < legal_moves.length(); i++) {
+					Undo u;
+					Move m = *(legal_moves.list + i);
+					Threads.board->do_move(m, &u);
+					TTEntry probe = {};
+					if (Main_TT.probe(Threads.board->get_key(), &probe) == EVAL_FAIL) {
+						pvmoves[i] = make_pair(m, -EVAL_FAIL);
+					}
+					else {
+						pvmoves[i] = make_pair(m, -probe.eval);
+					}
+					Threads.board->undo_move(m);
+				}
+				// Find top moves
+				sort(pvmoves.begin(), pvmoves.end(), compare);
 
-			// Get candidate move
-			score = Main_TT.probe(Threads.board->get_key(), 0, &bmove);
-			stringstream buf;
-			currdepth = 0;
-			getpv(buf, Threads.board, currdepth);
-			// Reset TTEntry if probe fails
-			if (score == EVAL_FAIL) {
-				if (!*stop) { Main_TT.clear_entry(Threads.board->get_key()); continue; }
-				else { cerr << "Probe Fail after Search" << endl; throw; }
+				// Print PVs
+				for (int i = 0; i < multipv_max; i++) {
+					score = pvmoves[i].second;
+					Move m = pvmoves[i].first;
+					Undo u;
+					Threads.board->do_move(m, &u);
+					stringstream buf;
+					currdepth = 0;
+					buf << m << " ";
+					getpv(buf, Threads.board, currdepth);
+					Threads.board->undo_move(m);
+					
+					if (i == 0) { max_depth = Threads.depth; }
+					if (score != -EVAL_FAIL) { dec_mate(score); }
+					
+					cout << "info time " << search_time.count()
+						<< " depth " << max_depth
+						<< " seldepth " << currdepth + 1
+						<< " nodes " << nodes << " multipv " << i + 1
+						<< " score " << eval_print(score)
+						<< " pv " << buf.str() << "\n";
+				}
+				cout << endl;
+
 			}
-			if (currdepth > max_depth) { max_depth = currdepth; }
+			else {
+				// Get candidate move
+				TTEntry probe = {};
+				Main_TT.probe(Threads.board->get_key(), &probe);
+				stringstream buf;
+				currdepth = 0;
+				getpv(buf, Threads.board, currdepth);
+				max_depth = Threads.depth;
 
-			// Print
-			cout << "info time " << search_time.count() << " depth " << max_depth
-				<< " currmove " << move(bmove) << " score " << eval_print(score)
-				<< " nodes " << node_count << " pv " << buf.str() << endl;
+				// Print
+				cout << "info time " << search_time.count() << " depth " << max_depth
+					<< " currmove " << move(probe.nmove) << " score " << eval_print(probe.eval)
+					<< " nodes " << nodes << " pv " << buf.str() << endl;
+			}
+			Threads.release_cout();
 		}
 
-		// Get candidate move
-		score = Main_TT.probe(Threads.board->get_key(), 0, &bmove);
-		stringstream buf;
-		getpv(buf, Threads.board, currdepth);
-
-		// Print
-		time_now = system_clock::now();
-		search_time = duration_cast<milliseconds>(time_now - time_start);
-		cout << "info time " << search_time.count() << " depth " << max_depth
-			<< " currmove " << move(bmove) << " score " << eval_print(score)
-			<< " nodes " << node_count << " pv " << buf.str() << endl;
-		return;
 	}
 
 }

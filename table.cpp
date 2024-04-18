@@ -1,5 +1,7 @@
 #include <vector>
 
+#define WINDOWS
+
 #ifdef WINDOWS
 #include <windows.h>
 #include <memoryapi.h>
@@ -48,13 +50,13 @@ namespace AGI {
 		table_free(table);
 	}
 
-	int TT::probe(Key key, int depth) {
+	int TT::probe(Key key, TTEntry* probe) {
 		TTEntry* entry_ptr = table + (key & SIZE_NUM);
 		entry_ptr->m.lock();
-		if (entry_ptr->key == key && entry_ptr->depth >= depth) { // Real hit
-			int return_int = entry_ptr->eval;
+		if (entry_ptr->key == key) { // Real hit
+			memcpy(probe, entry_ptr, sizeof(TTEntry));
 			entry_ptr->m.unlock();
-			return return_int;
+			return 0;
 		}
 		else { // False hit or New node
 			entry_ptr->m.unlock();
@@ -62,50 +64,35 @@ namespace AGI {
 		}
 	}
 
-	int TT::probe(Key key, int depth, Move* move) {
-		TTEntry* entry_ptr = table + (key & SIZE_NUM);
-		entry_ptr->m.lock();
-		if (entry_ptr->key == key && entry_ptr->depth >= depth) { // Real hit
-			int return_int = entry_ptr->eval;
-			*move = entry_ptr->nmove;
-			entry_ptr->m.unlock();
-			return return_int;
-		}
-		else { // False hit or New node
-			entry_ptr->m.unlock();
-			return EVAL_FAIL;
-		}
+	bool is_closer_mate(int eval1, int eval2) {
+		if (eval1 > 10000) { return eval1 > eval2; }
+		if (eval1 < -10000) { return eval1 < eval2; }
+		return false;
 	}
 
-	int TT::probe(Key key, int depth, Move* move, int* pdepth) {
+	void TT::register_entry(Key key, int depth, int eval, Move move, int volatility) {
 		TTEntry* entry_ptr = table + (key & SIZE_NUM);
 		entry_ptr->m.lock();
-		if (entry_ptr->key == key && entry_ptr->depth >= depth) { // Real hit
-			int return_int = entry_ptr->eval;
-			*move = entry_ptr->nmove;
-			*pdepth = entry_ptr->depth;
-			entry_ptr->m.unlock();
-			return return_int;
+		if (entry_ptr->key == key) {
+			if (// Only write if depth is higher
+				(depth >= entry_ptr->depth)) {
+				entry_ptr->depth = depth;
+				entry_ptr->eval = eval;
+				entry_ptr->volatility = volatility;
+				entry_ptr->nmove = move;
+				entry_ptr->table_sn = tt_sn;
+			}
 		}
-		else { // False hit or New node
-			entry_ptr->m.unlock();
-			*move = NULL_MOVE;
-			*pdepth = 0;
-			return EVAL_FAIL;
-		}
-	}
-
-	void TT::register_entry(Key key, int depth, int eval, Move move) {
-		TTEntry* entry_ptr = table + (key & SIZE_NUM);
-		entry_ptr->m.lock();
-		if (entry_ptr->key == key || // Overwrite
-			depth >= entry_ptr->depth ||
-			tt_sn > entry_ptr->table_sn) {
-			entry_ptr->key = key;
-			entry_ptr->depth = depth;
-			entry_ptr->eval = eval;
-			entry_ptr->nmove = move;
-			entry_ptr->table_sn = tt_sn;
+		else { // Different key
+			if (depth >= entry_ptr->depth ||
+				tt_sn > entry_ptr->table_sn) {
+				entry_ptr->key = key;
+				entry_ptr->depth = depth;
+				entry_ptr->eval = eval;
+				entry_ptr->volatility = volatility;
+				entry_ptr->nmove = move;
+				entry_ptr->table_sn = tt_sn;
+			}
 		}
 		entry_ptr->m.unlock();
 		return;

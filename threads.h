@@ -32,6 +32,8 @@ namespace AGI {
 	class Threadmgr {
 	public:
 		Position* board;
+		mutex cout_lock;
+
 		vector<Thread*> threads;
 		atomic<bool> stop;
 		atomic<int> depth;
@@ -42,6 +44,8 @@ namespace AGI {
 		void add_thread();
 		void del_thread();
 		void set_threads(int n);
+		void acquire_cout();
+		void release_cout();
 		void acquire_lock();
 		void release_lock();
 		void sync();

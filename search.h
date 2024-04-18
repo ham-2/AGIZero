@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <sstream>
+#include <algorithm>
 
 #include "eval.h"
 #include "position.h"
@@ -19,9 +20,11 @@ namespace AGI {
 
 	void search_start(Thread* t, float time, float max_time, bool force_time, int max_ply);
 
-	extern bool ponder;
 	extern bool lichess_timing;
+	extern bool stop_if_mate;
+	extern bool ponder;
 	extern atomic<bool> ponder_continue;
+	extern int multipv;
 }
 
 #endif

@@ -30,6 +30,7 @@ namespace AGI {
 		Move nmove;
 		short depth;
 		short eval;
+		short volatility;
 		spinlock m;
 		Key pad;
 	};
@@ -44,10 +45,8 @@ namespace AGI {
 		TT();
 		~TT();
 
-		int probe(Key key, int depth);
-		int probe(Key key, int depth, Move* move);
-		int probe(Key key, int depth, Move* move, int* pdepth);
-		void register_entry(Key key, int depth, int eval, Move move);
+		int probe(Key key, TTEntry* probe);
+		void register_entry(Key key, int depth, int eval, Move move, int volatility);
 		TTEntry* backup_entry(Key key);
 		void write_entry(TTEntry* ptr);
 		void clear_entry(Key key);

@@ -21,7 +21,7 @@ int main() {
 	material_init();
 	Position::init();
 	Threads.init();
-	
+	cout << nounitbuf << "AGIZero 2.0" << endl;
 
 	while (true) {
 		getline(cin, input);
@@ -41,7 +41,11 @@ int main() {
 		}
 
 		else if (word == "isready") {
+			Threads.stop = true;
+			Threads.sync();
+			Threads.acquire_cout();
 			cout << "readyok" << endl;
+			Threads.release_cout();
 		}
 		
 		else if (word == "position") {
