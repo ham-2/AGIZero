@@ -165,10 +165,7 @@ namespace AGI {
 			// Forced Stop
 			if (Threads.stop) { break; }
 
-			// probe & reset if fail
-			if (Main_TT.probe(board->get_key(), &probe) == EVAL_FAIL) {
-				Main_TT.clear_entry(board->get_key()); continue;
-			}
+			Main_TT.probe(board->get_key(), &probe);
 
 			// Stop if mate
 			if (stop_if_mate && (probe.eval > 29000 || probe.eval < -29000)) {
@@ -222,6 +219,7 @@ namespace AGI {
 		//}
 
 		// Print Bestmove
+		Main_TT.probe(board->get_key(), &probe);
 		Threads.acquire_cout();
 		cout << "bestmove " << move(probe.nmove) << endl;		
 		Threads.release_cout();

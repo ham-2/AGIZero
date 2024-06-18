@@ -416,125 +416,58 @@ namespace AGI {
 		}
 
 		// repetition
-		if (board.get_repetition() < -1024) { return 0; }
+		if (board.get_repetition(depth)) { return 0; }
 
 		// 50-move
 		if (board.get_fiftymove() > 99) { return 0; }
 
 		int new_eval = EVAL_LOSS;
 		int comp_eval;
-		
-		//depth restriction
-		if (depth < 1) {
-			new_eval = end_eval(board);
-			// ab
-			if (new_eval > alpha) { alpha = new_eval; }
-			if (alpha > beta) { return new_eval; }
-
-			inc_mate(new_eval);
-			inc_mate(alpha);
-			inc_mate(beta);
-
-			int margin = alpha - new_eval - DELTA_MARGIN > 0 ? 
-						 alpha - new_eval - DELTA_MARGIN : 0;
-
-			for (auto move = legal_moves.list; move != legal_moves.end; move++) {
-				if (board.capture_or_promotion(*move)) {
-					if (board.see(*move) > margin) { // SEE > 0 Extension
-						Undo u;
-						board.do_move(*move, &u);
-						comp_eval = -eval(board, 0, -beta, -alpha);
-						board.undo_move(*move);
-						dec_mate(comp_eval);
-						if (comp_eval > new_eval) { 
-							new_eval = comp_eval;
-							if (comp_eval > alpha) { 
-								alpha = comp_eval;
-								if (alpha >= beta) { break; }
-							}
-						}
-					}
-				}
-			}
-
-			if (new_eval > 10000) { new_eval--; }
-			else if (new_eval < -10000) { new_eval++; }
-			return new_eval;
-		}
 
 		if (board.get_checkers()) { // Checked
-			
-			inc_mate(alpha);
-			inc_mate(beta); // For Mate Distance Comparison
 
 			for (auto move = legal_moves.list; move != legal_moves.end; move++) {
 				Undo u;
 				board.do_move(*move, &u);
-				comp_eval = -eval(board, depth - 1, -beta, -alpha);
+				comp_eval = -eval(board, depth + 1, -beta, -alpha);
 				board.undo_move(*move);
 				dec_mate(comp_eval);
-				if (comp_eval > new_eval) { 
+				if (comp_eval > new_eval) {
 					new_eval = comp_eval;
 					if (comp_eval > alpha) { alpha = comp_eval; }
 				}
-				if (alpha >= beta) { break; }
+				if (alpha > beta) { break; }
 			}
 
-			if (new_eval > 10000) { new_eval--; }
-			else if (new_eval < -10000) { new_eval++; }
 			return new_eval;
 		}
-
+		
 		else {
 			new_eval = end_eval(board);
+			new_eval = new_eval * (100 - board.get_fiftymove()) / 100;
 
+			// ab
 			if (new_eval > alpha) { alpha = new_eval; }
 			if (alpha > beta) { return new_eval; }
 
-			inc_mate(new_eval);
-			inc_mate(alpha);
-			inc_mate(beta); // For Mate Distance Comparison
-
-			int margin = alpha - new_eval - DELTA_MARGIN > 0 ?
-						 alpha - new_eval - DELTA_MARGIN : 0;
-
-			// Quiescence Expansion
 			for (auto move = legal_moves.list; move != legal_moves.end; move++) {
-				if (board.capture_or_promotion(*move)) {
-					if (board.see(*move) > margin) {
-						Undo u;
-						board.do_move(*move, &u);
-						comp_eval = -eval(board, depth - 1, -beta, -alpha);
-						board.undo_move(*move);
-						dec_mate(comp_eval);
-						if (comp_eval > new_eval) { 
-							new_eval = comp_eval;
-							if (comp_eval > alpha) { 
-								alpha = comp_eval;
-								if (alpha >= beta) { break; }
-							}
-						}
-					}
-				}
-
-				else if (board.is_check(*move)) {
+				if (board.is_non_quiesce(*move))
+				{
 					Undo u;
 					board.do_move(*move, &u);
-					comp_eval = -eval(board, depth - 1, -beta, -alpha);
+					comp_eval = -eval(board, depth + 1, -beta, -alpha);
 					board.undo_move(*move);
 					dec_mate(comp_eval);
 					if (comp_eval > new_eval) { 
 						new_eval = comp_eval;
 						if (comp_eval > alpha) { 
 							alpha = comp_eval;
-							if (alpha >= beta) { break; }
+							if (alpha > beta) { break; }
 						}
 					}
 				}
 			}
-			
-			if (new_eval > 10000) { new_eval--; }
-			else if (new_eval < -10000) { new_eval++; }
+
 			return new_eval;
 		}
 	}
@@ -565,6 +498,96 @@ namespace AGI {
 	}
 
 	int volatility_eval(Position& board) {
-		return 0;
+
+		if (board.get_material_t() >> 13 == 0) { return 500; }
+
+		int volatility_score = 0;
+
+		Bitboard occupied = board.get_occupied();
+		Bitboard white_pawns = board.get_pieces(WHITE, PAWN);
+		Bitboard black_pawns = board.get_pieces(BLACK, PAWN);
+		Bitboard white_pieces = board.get_pieces(WHITE) ^ white_pawns;
+		Bitboard black_pieces = board.get_pieces(BLACK) ^ black_pawns;
+		Bitboard white_king = board.get_pieces(WHITE, KING);
+		Bitboard black_king = board.get_pieces(BLACK, KING);
+		Square w_king = board.get_king_square(WHITE);
+		Square b_king = board.get_king_square(BLACK);
+		Bitboard white_k_adj = PseudoAttacks[KING][w_king] | white_king;
+		Bitboard black_k_adj = PseudoAttacks[KING][b_king] | black_king;
+
+
+		// Pawns
+		Bitboard pawn_cap = (attacks_pawn<BLACK>(board.get_pieces(BLACK)) & white_pawns) |
+							(attacks_pawn<WHITE>(board.get_pieces(WHITE)) & black_pawns);
+
+		volatility_score -= popcount(shift(white_pawns ^ pawn_cap,  8) & occupied)
+			* 20;
+		volatility_score -= popcount(shift(black_pawns ^ pawn_cap, -8) & occupied)
+			* 20;
+		volatility_score += popcount(pawn_cap) * 30;
+
+		Bitboard w = board.get_pieces(WHITE);
+		while(w) {
+			Square s = pop_lsb(&w);
+			Piece p = board.get_piece(s);
+			if (p == W_PAWN) 
+			{
+				if (Distance[b_king][s] < 3) { volatility_score += 30; }
+			}
+			else if (p == W_KNIGHT)
+			{
+				Bitboard a = attacks<KNIGHT>(s, occupied) & (black_pieces | black_k_adj);
+				volatility_score += popcount(a) * 40;
+			}
+			else if (p == W_BISHOP)
+			{
+				Bitboard a = attacks<BISHOP>(s, occupied) & (black_pieces | black_k_adj);
+				volatility_score += popcount(a) * 40;
+			}
+			else if (p == W_ROOK)
+			{
+				Bitboard a = attacks<ROOK>(s, occupied) & (black_pieces | black_k_adj);
+				volatility_score += popcount(a) * 20;
+			}
+			else if (p == W_QUEEN)
+			{
+				Bitboard a = attacks<QUEEN>(s, occupied) & (black_pieces | black_k_adj);
+				volatility_score += popcount(a) * 15;
+			}
+		}
+
+		Bitboard b = board.get_pieces(BLACK);
+		while (b) {
+			Square s = pop_lsb(&b);
+			Piece p = board.get_piece(s);
+			if (p == B_PAWN)
+			{
+				if (Distance[w_king][s] < 3) { volatility_score += 30; }
+			}
+			else if (p == B_KNIGHT)
+			{
+				Bitboard a = attacks<KNIGHT>(s, occupied) & (white_pieces | white_k_adj);
+				volatility_score += popcount(a) * 40;
+			}
+			else if (p == B_BISHOP)
+			{
+				Bitboard a = attacks<BISHOP>(s, occupied) & (white_pieces | white_k_adj);
+				volatility_score += popcount(a) * 40;
+			}
+			else if (p == B_ROOK)
+			{
+				Bitboard a = attacks<ROOK>(s, occupied) & (white_pieces | white_k_adj);
+				volatility_score += popcount(a) * 20;
+			}
+			else if (p == B_QUEEN)
+			{
+				Bitboard a = attacks<QUEEN>(s, occupied) & (white_pieces | white_k_adj);
+				volatility_score += popcount(a) * 15;
+			}
+		}
+
+		if (volatility_score < 0) { return 0; }
+
+		return volatility_score;
 	}
 }

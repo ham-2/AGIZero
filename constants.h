@@ -4,8 +4,8 @@
 namespace AGI {
 	// Parameters
 	constexpr int SEARCH_THREADS_MAX = 128;
-	constexpr int NULL_DEPTH = 1;
-	constexpr int QUIESCENCE_DEPTH = 2;
+	//constexpr int NULL_DEPTH = 1;
+	//constexpr int QUIESCENCE_DEPTH = 0;
 	constexpr int DEFAULT_PLY = 1;
 	constexpr int DEFAULT_DELTA = 50;
 	constexpr int ENDGAME_DELTA = 300;

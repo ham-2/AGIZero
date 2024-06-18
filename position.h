@@ -86,9 +86,9 @@ namespace AGI {
 		bool get_repetition(int root_dist) { 
 			return undo_stack->repetition == 0 ? false :
 				undo_stack->repetition > 0 ? (undo_stack->repetition <= root_dist) :
-				undo_stack->repetition > -1024 ? (undo_stack->repetition >= -root_dist) :
 				true;
 		}
+		inline bool get_threefold() { return undo_stack->repetition < 0; }
 		inline bool get_castling_right(int i) {
 			return bool(undo_stack->castling_rights & (1 << i));
 		}
@@ -109,14 +109,17 @@ namespace AGI {
 		inline bool is_passed_pawn_push(Move m, Color c) {
 			return bool(get_from(m) & pieces[PAWN]) && is_passed_pawn(get_from(m), c);
 		}
-		inline bool capture_or_promotion(Move m) {
-			return get_movetype(m) == 0 ? squares[get_to(m)] != EMPTY : get_movetype(m) != 2;
-		}
 		inline bool material_capture(Move m) {
 			return to_upiece(squares[get_to(m)]) > to_upiece(squares[get_from(m)]);
 		}
 		int see(Move m);
 		bool is_check(Move m);
+		inline bool Position::is_non_quiesce(Move m)
+		{
+			return get_movetype(m) == 0
+				? (squares[get_to(m)] != EMPTY && see(m) > 0)
+				: get_movetype(m) != 2;
+		}
 
 		void show();
 		void set(string fen);

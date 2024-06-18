@@ -117,7 +117,6 @@ int main() {
 
 		else if (word == "test") {
 			ss >> word;
-			//Threads.see(word);
 			Threads.test_eval();
 		}
 

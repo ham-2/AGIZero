@@ -15,6 +15,7 @@ namespace AGI {
 	Key enpassant_keys[8];
 	Key side_to_move_key;
 	Key fifty_move_key[8];
+	Key threefold_key;
 
 	constexpr Piece piece_list[] = { W_PAWN, W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
 									 B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING };
@@ -46,7 +47,7 @@ namespace AGI {
 			fifty_move_key[i] = Key(generator.get());
 		}
 
-		//set castling_helper helper
+		//set castling_helper
 		for (int i = A1; i < SQ_END; i++) {
 			castling_helper[i] = ~(0);
 		}
@@ -56,6 +57,8 @@ namespace AGI {
 		castling_helper[A8] = ~(8);
 		castling_helper[E8] = ~(4 | 8);
 		castling_helper[H8] = ~(4);
+
+		threefold_key = Key(generator.get());
 	}
 
 	void Position::pop_stack() {
@@ -158,6 +161,9 @@ namespace AGI {
 	}
 
 	Key Position::get_key() {
+		if (undo_stack->repetition < 0) {
+			return undo_stack->key ^ threefold_key;
+		}
 		// we need to modify key if 50move count is high
 		if (undo_stack->fifty_move > 20) {
 			return undo_stack->key ^ fifty_move_key[((undo_stack->fifty_move - 20) >> 2) & 8];
@@ -231,7 +237,9 @@ namespace AGI {
 			attackers |= see_attackers(s, occupied, bq, rq);
 			c = ~c;
 			if (depth > 6) { return EVAL_WIN; }
-		} while (lp = see_least_piece(c, attackers, u));
+		} 
+		while (lp = see_least_piece(c, attackers, u));
+
 		while (--depth) {
 			value[depth - 1] = -max(-value[depth - 1], value[depth]);
 		}
@@ -597,8 +605,7 @@ namespace AGI {
 		while ((p->prev != nullptr) && p->prev->fifty_move == p->fifty_move - 1) {
 			dist++;
 			if (new_undo->key == p->prev->key) {
-				new_undo->repetition = (p->prev->repetition == 0) ? dist :
-					(p->prev->repetition > 0) ? -dist : -dist - 1024;
+				new_undo->repetition = (p->prev->repetition == 0) ? dist : -dist;
 				break;
 			}
 			p = p->prev;

@@ -70,7 +70,7 @@ namespace AGI {
 		return false;
 	}
 
-	void TT::register_entry(Key key, int depth, int eval, Move move, int volatility) {
+	void TT::register_entry(Key key, int depth, int eval, Move move) {
 		TTEntry* entry_ptr = table + (key & SIZE_NUM);
 		entry_ptr->m.lock();
 		if (entry_ptr->key == key) {
@@ -78,7 +78,6 @@ namespace AGI {
 				(depth >= entry_ptr->depth)) {
 				entry_ptr->depth = depth;
 				entry_ptr->eval = eval;
-				entry_ptr->volatility = volatility;
 				entry_ptr->nmove = move;
 				entry_ptr->table_sn = tt_sn;
 			}
@@ -89,7 +88,6 @@ namespace AGI {
 				entry_ptr->key = key;
 				entry_ptr->depth = depth;
 				entry_ptr->eval = eval;
-				entry_ptr->volatility = volatility;
 				entry_ptr->nmove = move;
 				entry_ptr->table_sn = tt_sn;
 			}

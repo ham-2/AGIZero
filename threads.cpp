@@ -147,8 +147,23 @@ namespace AGI {
 	}
 
 	void Threadmgr::test_eval() {
-		cout << end_eval(*board) << " " << "\n";
-		//cout << eval(*board, 3) << "\n";
+		//cout << end_eval(*board) << " " << eval_print(end_eval(*board)) << "\n";
+		cout << eval(*board, 0) << " " << eval_print(eval(*board, 0)) << "\n";
+		//cout << board->get_threefold() << endl;
+
+		MoveList legal_moves;
+		legal_moves.generate(*board);
+		for (auto move = legal_moves.list; move != legal_moves.end; move++) {
+			Undo u;
+			board->do_move(*move, &u);
+			//TTEntry probe = {};
+			//Main_TT.probe(board->get_key(), &probe);
+			//cout << AGI::move(*move) << " " << eval_print(-probe.eval) << "\n";
+ 			cout << AGI::move(*move) << " " << eval_print(-eval(*board, 0)) << "\n";
+			board->undo_move(*move);
+		}
+
+		cout << "v " << volatility_eval(*board) << endl;
 	}
 
 	void Threadmgr::gen()

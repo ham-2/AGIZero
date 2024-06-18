@@ -51,7 +51,7 @@ namespace AGI {
 		if (legal_moves.length() < multipv_max) { multipv_max = legal_moves.length(); }
 		vector<pair<Move, int>> pvmoves(legal_moves.length());
 
-		while (!(*stop)) {
+		while (true) {
 			time_now = system_clock::now();
 			search_time = duration_cast<milliseconds>(time_now - time_start);
 			unique_lock<mutex> m(mu);
@@ -136,6 +136,8 @@ namespace AGI {
 					<< " nodes " << nodes << " pv " << buf.str() << endl;
 			}
 			Threads.release_cout();
+
+			if (*stop) { break; }
 		}
 
 	}
