@@ -10,7 +10,7 @@ namespace AGI {
 	constexpr Score DoubledPawn  = S(PN[0], PN[1]);
 	constexpr Score IsolatedPawn = S(PN[2], PN[3]);
 	constexpr Score BackwardPawn = S(PN[4], PN[5]);
-	constexpr Score PPPawn       = S(PN[6], PN[7]);
+	//constexpr Score PPPawn       = S(PN[6], PN[7]);
 
 	Score pawn_eval(Position& board)
 	{
@@ -45,8 +45,8 @@ namespace AGI {
 			if (!(get_fileboard(sq) & b_pawns)) {
 				if (board.is_passed_pawn(sq, WHITE)) { // Real Passed
 					score += PassedPawn[get_rank(sq)];
-					if (SquareBoard[sq] & attacks_pawn<WHITE>(w_pawns) 
-						&& get_rank(sq) > 3) { score += PPPawn * get_rank(sq); }
+					//if (SquareBoard[sq] & attacks_pawn<WHITE>(w_pawns) 
+					//	&& get_rank(sq) > 3) { score += PPPawn * get_rank(sq); }
 				}
 				else if (!(get_forward(WHITE, sq) & w_pawns)) { // Candidate
 					score += PassedPawn[get_rank(sq) + 8];
@@ -77,8 +77,8 @@ namespace AGI {
 			if (!(get_fileboard(sq) & w_pawns)) {
 				if (board.is_passed_pawn(sq, BLACK)) {
 					score -= PassedPawn[get_rank(sq) ^ 7];
-					if (SquareBoard[sq] & attacks_pawn<BLACK>(b_pawns) 
-						&& get_rank(sq) < 4) { score -= PPPawn * (get_rank(sq) ^ 7); }
+					//if (SquareBoard[sq] & attacks_pawn<BLACK>(b_pawns) 
+					//	&& get_rank(sq) < 4) { score -= PPPawn * (get_rank(sq) ^ 7); }
 				}
 				else if (!(get_forward(BLACK, sq) & b_pawns)) {
 					score -= PassedPawn[(get_rank(sq) ^ 7) + 8];

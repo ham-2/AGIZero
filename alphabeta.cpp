@@ -60,6 +60,12 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 				index = index % legal_moves.length();
 				m = *(legal_moves.list + index);
 
+				// Adjust alpha to calculate critical moves
+				int lower_alpha = 0;
+				if (board.is_check(m)) { lower_alpha += 30; }
+				if (board.is_passed_pawn_push(m, board.get_side())) { lower_alpha += 50; }
+
+				// Do move
 				Undo u;
 				board.do_move(m, &u);
 				TTEntry probe_m = {};
@@ -88,13 +94,13 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 						if ((reduction > ply / 3)
 							&& (m != nmove)) 
 						{
-							if (comp_eval < new_eval) { break; }
+							if (comp_eval < new_eval - lower_alpha) { break; }
 						}
 
 						comp_eval = -alpha_beta(board, stop,
 							reduction, &probe_m,
 							root_c, step,
-							-beta, -alpha,
+							-beta, -alpha + lower_alpha,
 							root_dist
 						);
 						dec_mate(comp_eval);

@@ -124,43 +124,45 @@ namespace AGI {
 				board->get_side(), t->step);
 
 			// MultiPV search
-			//if (multipv_max > 1) {
-			//	// Move Generation
-			//	MoveList legal_moves;
-			//	legal_moves.generate(*board);
-			//	if (legal_moves.length() < multipv_max) { multipv_max = legal_moves.length(); }
-			//	vector<pair<Move, int>> pvmoves(legal_moves.length());
+			if (multipv_max > 1) {
+				// Move Generation
+				MoveList legal_moves;
+				legal_moves.generate(*board);
+				if (legal_moves.length() < multipv_max) { multipv_max = legal_moves.length(); }
+				vector<pair<Move, int>> pvmoves(legal_moves.length());
 
-			//	// Update scores
-			//	for (int i = 0; i < legal_moves.length(); i++) {
-			//		Undo u;
-			//		Move m = *(legal_moves.list + i);
-			//		board->do_move(m, &u);
-			//		TTEntry probe = {};
-			//		if (Main_TT.probe(Threads.board->get_key(), &probe) == EVAL_FAIL) {
-			//			pvmoves[i] = make_pair(m, -EVAL_FAIL);
-			//		}
-			//		else {
-			//			pvmoves[i] = make_pair(m, -probe.eval);
-			//		}
-			//		board->undo_move(m);
-			//	}
+				// Update scores
+				for (int i = 0; i < legal_moves.length(); i++) {
+					Undo u;
+					Move m = *(legal_moves.list + i);
+					board->do_move(m, &u);
+					TTEntry probe = {};
+					if (Main_TT.probe(Threads.board->get_key(), &probe) == EVAL_FAIL) {
+						pvmoves[i] = make_pair(m, -EVAL_FAIL);
+					}
+					else {
+						pvmoves[i] = make_pair(m, -probe.eval);
+					}
+					board->undo_move(m);
+				}
 
-			//	// Find top moves
-			//	sort(pvmoves.begin(), pvmoves.end(), compare);
+				// Find top moves
+				sort(pvmoves.begin(), pvmoves.end(), compare);
 
-			//	// Search Top Moves
-			//	for (int i = 1; i < multipv_max; i++) {
-			//		Undo u;
-			//		board->do_move(pvmoves[i].first, &u);
-			//		
-			//		alpha_beta(*board, &(Threads.stop),
-			//			Threads.depth - 1,
-			//			board->get_side(), t->step);
+				// Search Top Moves
+				for (int i = 1; i < multipv_max; i++) {
+					Undo u;
+					board->do_move(pvmoves[i].first, &u);
 
-			//		board->undo_move(pvmoves[i].first);
-			//	}
-			//}
+					Main_TT.probe(Threads.board->get_key(), &probe);
+					
+					alpha_beta(*board, &(Threads.stop),
+						Threads.depth - 1, &probe,
+						~(board->get_side()), t->step);
+
+					board->undo_move(pvmoves[i].first);
+				}
+			}
 			
 			// Forced Stop
 			if (Threads.stop) { break; }

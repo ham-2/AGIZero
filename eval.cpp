@@ -82,7 +82,7 @@ namespace AGI {
 		if (mg != 0) {
 			int pscr = 0;
 
-			//
+			// Blocked C D E Pawns at second rank
 			if (shift(w_pawns & (CenterFiles | FileBoard[2]) & RankBoard[1], 8) & occupied) {
 				pscr -= MG[3];
 			}
@@ -92,32 +92,32 @@ namespace AGI {
 
 			// Castling Rights, Kings on Center
 			if ((white_king & CenterFiles) && !board.has_castling_rights(WHITE)) {
-				pscr -= MG[0]; white_attacker_value += KS[8];
+				pscr -= MG[0];
 			}
 			if ((black_king & CenterFiles) && !board.has_castling_rights(BLACK)) {
-				pscr += MG[0]; black_attacker_value += KS[8];
+				pscr += MG[0];
 			}
 
 			// Exposed King
 			if (popcount(get_fileboard(w_king) & pawns) < 2) {
+				white_attacker_value += KS[9];
 				if (!(get_fileboard(w_king) & w_pawns)) { white_attacker_value += KS[9]; }
-				if (!(get_fileboard(w_king) & b_pawns)) { white_attacker_value += KS[9]; }
 				pscr -= (2 - popcount(get_fileboard(w_king) & pawns)) * MG[1];
 				pscr += popcount(get_fileboard(w_king) & board.get_pieces(WHITE)) * MG[2];
 			}
 			if (popcount(get_fileboard(b_king) & pawns) < 2) {
+				black_attacker_value += KS[9];
 				if (!(get_fileboard(b_king) & b_pawns)) { black_attacker_value += KS[9]; }
-				if (!(get_fileboard(b_king) & w_pawns)) { black_attacker_value += KS[9]; }
-				pscr += (2 - popcount(get_fileboard(b_king) & (w_pawns | b_pawns))) * MG[1];
+				pscr += (2 - popcount(get_fileboard(b_king) & pawns)) * MG[1];
 				pscr -= popcount(get_fileboard(b_king) & board.get_pieces(BLACK)) * MG[2];
 			}
 			
 			// Pawn Shield
 			if (shift(white_king, 8) & b_pawns) { pscr += MG[5]; }
-			white_attacker_value -= popcount(shift(white_k_adj, 8) & w_pawns);
+			white_attacker_value -= 2 * popcount(shift(white_k_adj, 8) & w_pawns);
 
 			if (shift(black_king, -8) & w_pawns) { pscr -= MG[5]; }
-			black_attacker_value -= popcount(shift(black_k_adj, -8) & b_pawns);
+			black_attacker_value -= 2 * popcount(shift(black_k_adj, -8) & b_pawns);
 
 			// Pawn Storm
 			Bitboard w_storms = (get_fileboard(b_king) | adj_fileboard(b_king)) & w_pawns;
@@ -434,9 +434,11 @@ namespace AGI {
 				dec_mate(comp_eval);
 				if (comp_eval > new_eval) {
 					new_eval = comp_eval;
-					if (comp_eval > alpha) { alpha = comp_eval; }
+					if (comp_eval > alpha) { 
+						alpha = comp_eval;
+						if (alpha > beta) { break; }
+					}
 				}
-				if (alpha > beta) { break; }
 			}
 
 			return new_eval;

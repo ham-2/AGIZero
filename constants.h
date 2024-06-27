@@ -40,11 +40,11 @@ namespace AGI {
 
 	// Model
 	constexpr int PS[14] = { 39, 28, 24, 7, 14, 8, 12, 29, 12, 19, 18, 20, 16, 11 };
-	constexpr int MG[8] = { 16, 21, 8, 40, 10, 13, 0, 12 }; // 4, 5, 7th not used
+	constexpr int MG[8] = { 45, 21, 8, 40, 10, 13, 0, 12 }; // 4, 5, 7th not used
 	constexpr int EG[4] = { 12, 9, 5, 19 };
 	constexpr int LD[4] = { 3, 1, 19, 7 }; // 2nd not used
 	constexpr int PN[8] = { 8, 25, 5, 36, 11, 16, 12, 26 };
-	constexpr int KS[12] = { 3, 3, 4, 1, 5, 2, 11, 3, 1, 2, 1, 8 };
+	constexpr int KS[12] = { 3, 3, 4, 1, 5, 2, 11, 3, 1, 2, 1, 12 }; // [8] not used
 
 	constexpr int KNOWN_WIN =  15000;
 	constexpr int EVAL_FAIL =  30001;
