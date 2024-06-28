@@ -25,6 +25,7 @@ namespace AGI {
 			getpv(os, board, depth);
 			board->undo_move(probe.nmove);
 		}
+		//os << probe.depth << "d";
 	}
 
 	bool compare(pair<Move, int> a, pair<Move, int> b) { return a.second > b.second; }

@@ -114,6 +114,10 @@ namespace AGI {
 		}
 		int see(Move m);
 		bool is_check(Move m);
+		inline bool Position::is_capture(Move m)
+		{
+			return squares[get_to(m)] != EMPTY;
+		}
 		inline bool Position::is_non_quiesce(Move m)
 		{
 			return get_movetype(m) == 0

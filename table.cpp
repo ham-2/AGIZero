@@ -84,7 +84,7 @@ namespace AGI {
 		}
 		else { // Different key
 			if (depth >= entry_ptr->depth ||
-				tt_sn > entry_ptr->table_sn) {
+				tt_sn > entry_ptr->table_sn + 1) {
 				entry_ptr->key = key;
 				entry_ptr->depth = depth;
 				entry_ptr->eval = eval;

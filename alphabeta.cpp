@@ -52,6 +52,7 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 			int comp_eval, index;
 			int new_eval = EVAL_INIT;
 			int ply_low, reduction;
+			bool nmove_draws = false;
 			root_dist++;
 
 			index = legal_moves.find_index(nmove);
@@ -61,9 +62,11 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 				m = *(legal_moves.list + index);
 
 				// Adjust alpha to calculate critical moves
-				int lower_alpha = 0;
-				if (board.is_check(m)) { lower_alpha += 30; }
-				if (board.is_passed_pawn_push(m, board.get_side())) { lower_alpha += 50; }
+				int lower_alpha = 20;
+				if (board.is_check(m)) { lower_alpha += 100; }
+				if (board.is_capture(m)) { lower_alpha += 20; }
+				if (board.is_passed_pawn_push(m, board.get_side())) { lower_alpha += 200; }
+				if (nmove_draws) { lower_alpha += 100 + 100 * ply; }
 
 				// Do move
 				Undo u;
@@ -75,6 +78,7 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 					(board.get_fiftymove() > 99 && !board.get_checkers())) 
 				{
 					comp_eval = draw_value;
+					if (m == nmove) { nmove_draws = true; }
 				}
 				// Probe Table and Search
 				else
@@ -91,16 +95,18 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 					}
 
 					while (reduction < ply) {
+						int lower_alpha_r = lower_alpha / (reduction + 1);
+
 						if ((reduction > ply / 3)
 							&& (m != nmove)) 
 						{
-							if (comp_eval < new_eval - lower_alpha) { break; }
+							if (comp_eval < new_eval - lower_alpha_r) { break; }
 						}
 
 						comp_eval = -alpha_beta(board, stop,
 							reduction, &probe_m,
 							root_c, step,
-							-beta, -alpha + lower_alpha,
+							-beta, -alpha + lower_alpha_r,
 							root_dist
 						);
 						dec_mate(comp_eval);
