@@ -32,7 +32,7 @@ int main() {
 		if (word == "quit") { break; }
 
 		else if (word == "uci") {
-			cout << "id name AGI\n"
+			cout << "id name Topoki\n"
 				<< "id author Seungrae Kim" << endl;
 			// Options
 			print_option();
