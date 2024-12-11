@@ -1,52 +1,39 @@
 #include "alphabeta.h"
 
-namespace AGI {
-
 int alpha_beta(Position& board, atomic<bool>* stop,
-	int ply, int* prev_red, 
+	int ply, TTEntry* probe,
 	Color root_c, int step,
 	int alpha, int beta,
 	int root_dist) 
 {
 
-	if (*stop) { return 0; }
+	if (*stop) { return EVAL_FAIL; }
 
-	// Contempt
-	int draw_value = board.get_side() == root_c ? contempt : -contempt;
-
-	if (board.get_repetition(root_dist)) { *prev_red = ply; return draw_value; }
-
-	// 50-move
-	if (board.get_fiftymove() > 99 && !board.get_checkers()) { *prev_red = ply; return draw_value; }
-
-	// Table Check
-	Move nmove = NULL_MOVE;
-	int probe = Main_TT.probe(board.get_key(), ply);
-	if (probe != EVAL_FAIL) { *prev_red = ply; return probe; } // Table Hit
-
-	// Table Miss
-	if (ply == 0) { // QSearch
-		*prev_red = 0;
-		return eval(board, QUIESCENCE_DEPTH, alpha, beta);
+	if (ply <= 0) { // QSearch
+		probe->type = 0;
+		int qeval = eval(board, 0, alpha, beta);
+		return qeval;
 	}
 
-	else { 
-		int delta = DEFAULT_DELTA + INCREMENT_DELTA * ply;
-		int ply_low = ply / 3;
-		if (board.get_material_t() <= 4000) {
-			delta += ENDGAME_DELTA;
-			//ply_low = ply / 2;
-		}
-
+	else {
 		// Move Generation
 		MoveList legal_moves;
 		legal_moves.generate(board);
 
+		Key root_key = board.get_key();
+		int draw_value = board.get_side() == root_c ? -contempt : 0;
+
 		// Mates and Stalemates
 		if (!legal_moves.length()) {
-			*prev_red = ply;
-			if (board.get_checkers()) { return EVAL_LOSS; }
-			else { return draw_value; }
+			probe->type = 0;
+			if (board.get_checkers()) {
+				Main_TT.register_entry(root_key, EVAL_LOSS, NULL_MOVE, 0, 0);
+				return EVAL_LOSS;
+			}
+			else { 
+				Main_TT.register_entry(root_key, draw_value, NULL_MOVE, 0, 0);
+				return draw_value;
+			}
 		}
 
 		else {
@@ -54,58 +41,110 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 			if (ply < NULLMOVE_MAX_PLY && board.get_nh_condition()) {
 				Undo u;
 				board.do_null_move(&u);
-				int null_value = -eval(board, NULL_DEPTH, -beta, -alpha);
+				int null_value = -eval(board, 0, -beta, -alpha);
 				board.undo_null_move();
 
-				if (null_value > beta) { *prev_red = ply; return null_value; }
+				if (null_value > beta) { return null_value; }
 			}
 
 			Move m;
-			Main_TT.probe(board.get_key(), 0, &nmove);
-			bool table_miss = (nmove == NULL_MOVE);
+			Move nmove = probe->nmove;
+			Move draw_move = NULL_MOVE;
 			int comp_eval, index;
 			int new_eval = EVAL_INIT;
-			int new_depth = 0;
-			int currdepth = 0;
-			int reduction = table_miss ? ply_low : ply - 1;
-			bool nmove_draw = false;
+			int alpha_i = alpha;
+			int ply_low, reduction;
+			root_dist++;
 
 			index = legal_moves.find_index(nmove);
 			int i = 0;
-			while ((table_miss || i < legal_moves.length()) && !(*stop)) {
+			probe->type = 0;
+			while ((i < legal_moves.length()) && !(*stop)) {
 				index = index % legal_moves.length();
 				m = *(legal_moves.list + index);
 
-				//if (board.capture_or_promotion(m) ||
-				//	board.is_passed_pawn_push(m, board.get_side())) {
-				//	reduction += 3;
-				//	if (reduction > ply - 1) { reduction = ply - 1; }
-				//}
+				// Adjust alpha to calculate critical moves
+				int lower_alpha = 20;
+				if (board.is_check(m)) { lower_alpha += 100; }
+				if (board.is_capture(m)) { lower_alpha += 20; }
+				if (board.is_passed_pawn_push(m, board.get_side())) { lower_alpha += 200; }
 
-				if (i == legal_moves.length()) {
-					reduction = ply - 1;
-					m = nmove;
-					table_miss = false;
-				}
+				// Do move
 				Undo u;
 				board.do_move(m, &u);
-				comp_eval = -alpha_beta(board, stop,
-					reduction, &currdepth,
-					root_c, step,
-					-beta, -alpha,
-				    root_dist + 1
-				);
-				dec_mate(comp_eval);
+				TTEntry probe_m = {};
 
-				if (i == 0) { nmove_draw = (comp_eval == draw_value); }
+				// Repetition + 50-move
+				if (board.get_repetition(root_dist) ||
+					(board.get_fiftymove() > 99 && !board.get_checkers())) 
+				{
+					draw_move = m;
+					comp_eval = EVAL_INIT; // Skip
+				}
+				// Probe Table and Search
+				else
+				{
+					if (Main_TT.probe(board.get_key(), &probe_m) == EVAL_FAIL)
+					{ // Table Miss
+						reduction = 0;
+					}
+					else
+					{ // Table Hit
+						comp_eval = -probe_m.eval;
+						dec_mate(comp_eval);
+						if (probe_m.depth >= ply - 1 &&
+							comp_eval >= beta &&
+							probe_m.type != -1) {
+							new_eval = comp_eval;
+							alpha = comp_eval;
+							nmove = m;
+							board.undo_move(m);
+							probe->type = -1;
+							break;
+						} // Prune
+						if (probe_m.depth >= ply - 1 &&
+							comp_eval < new_eval &&
+							probe_m.type != 1) {
+							board.undo_move(m);
+							i++;
+							index += step;
+							continue;
+						} // Skip
+
+						// Search from
+						reduction = probe_m.nmove == NULL_MOVE ? ply :
+							min(probe_m.depth + 1, ply - 1);
+					}
+
+					while (reduction < ply) {
+						int lower_alpha_r = lower_alpha / (reduction + 1);
+
+						if ((probe_m.type != 1) &&
+							(reduction > ply / 3) &&
+							(comp_eval < new_eval - lower_alpha_r))
+						{
+							break;
+						}
+
+						comp_eval = -alpha_beta(board, stop,
+							reduction, &probe_m,
+							root_c, step,
+							-beta, -alpha + lower_alpha_r,
+							root_dist
+						);
+						dec_mate(comp_eval);
+
+						reduction++;
+					}
+				}
 
 				if (comp_eval > new_eval) {
 					new_eval = comp_eval;
-					new_depth = currdepth + 1;
 					nmove = m;
 					if (new_eval > alpha) { alpha = new_eval; }
-					if (alpha >= beta + delta) {
+					if (alpha > beta) {
 						board.undo_move(m);
+						probe->type = -1;
 						break;
 					}
 				}
@@ -113,18 +152,23 @@ int alpha_beta(Position& board, atomic<bool>* stop,
 				board.undo_move(m);
 				i++;
 				index += step;
-				reduction = ply_low;
 			}
+
+			// if there is a draw
+			if (draw_move != NULL_MOVE &&
+				new_eval < draw_value) {
+				new_eval = draw_value;
+				nmove = draw_move;
+			}
+
+			if (alpha == alpha_i) { probe->type = 1; }
 
 			if (!(*stop)) {
-				Main_TT.register_entry(board.get_key(), new_depth, new_eval, nmove);
+				Main_TT.register_entry(root_key, new_eval, nmove, ply, probe->type);
 			}
 
-			*prev_red = new_depth;
 			return new_eval;
 		}
 	}
 
 }
-
-} // Namespace

@@ -3,25 +3,25 @@
 
 #include <cmath>
 #include <sstream>
+#include <algorithm>
 
+#include "alphabeta.h"
 #include "eval.h"
 #include "position.h"
+#include "printer.h"
+#include "table.h"
 #include "threads.h"
 
-namespace AGI {
+void get_time(istringstream& ss, Color c, float& time, float& max_time, bool& force_time, int& max_ply);
 
-	using namespace std;
-	using namespace AGI;
+void clear1ply(Position& board);
 
-	void get_time(istringstream& ss, Color c, float& time, float& max_time, bool& force_time, int& max_ply);
+void search_start(Thread* t, float time, float max_time, bool force_time, int max_ply);
 
-	void clear1ply(Position& board);
-
-	void search_start(Thread* t, float time, float max_time, bool force_time, int max_ply);
-
-	extern bool ponder;
-	extern bool lichess_timing;
-	extern atomic<bool> ponder_continue;
-}
+extern bool lichess_timing;
+extern bool stop_if_mate;
+extern bool ponder;
+extern atomic<bool> ponder_continue;
+extern int multipv;
 
 #endif

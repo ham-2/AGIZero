@@ -13,12 +13,10 @@
 
 using namespace std;
 
-namespace AGI {
-	int alpha_beta(Position& board, atomic<bool>* stop,
-		int ply, int* prev_red,
-		Color root_c, int step,
-		int alpha = EVAL_LOSS, int beta = EVAL_WIN,
-		int root_dist = 0);
-}
+int alpha_beta(Position& board, atomic<bool>* stop,
+	int ply, TTEntry* probe,
+	Color root_c, int step,
+	int alpha = EVAL_LOSS, int beta = EVAL_WIN,
+	int root_dist = 0);
 
 #endif

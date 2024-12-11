@@ -11,7 +11,6 @@
 #include "threads.h"
 
 using namespace std;
-using namespace AGI;
 
 int main() {
 	

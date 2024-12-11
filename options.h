@@ -3,16 +3,13 @@
 
 #include <sstream>
 
-#include "table.h"
 #include "search.h"
+#include "eval.h"
+#include "table.h"
+#include "threads.h"
 
-namespace AGI {
-	using namespace std;
+void print_option();
 
-	void print_option();
-
-	void set_option(istringstream& ss);
-
-}
+void set_option(istringstream& ss);
 
 #endif
